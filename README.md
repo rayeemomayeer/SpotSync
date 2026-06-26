@@ -14,7 +14,7 @@
 
 SpotSync is a Go backend (Echo + GORM + PostgreSQL) that implements the Apollo B6A6 graded contract: nine REST endpoints, JWT auth, role-based access, and concurrency-safe reservations with dynamic availability.
 
-See SpotSync_Flagship_Blueprint.md for architecture strategy and SpotSync_Execution_Plan.md for the phased build plan.
+See SpotSync_Flagship_Blueprint.md for architecture strategy and SpotSync_Execution_Plan.md for the phased build Plan.
 
 ---
 
