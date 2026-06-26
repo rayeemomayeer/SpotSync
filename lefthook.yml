@@ -1,0 +1,13 @@
+# Git hooks — install with: lefthook install
+# https://github.com/evilmartians/lefthook
+
+pre-push:
+  parallel: true
+  commands:
+    fmt-check:
+      run: gofumpt -l .
+      fail_text: "Run 'make fmt' to fix formatting."
+    vet:
+      run: go vet ./...
+    test:
+      run: go test ./...
