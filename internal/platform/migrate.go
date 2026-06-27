@@ -3,24 +3,26 @@ package platform
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
-	"path/filepath"
-	"runtime"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+	appmigrations "github.com/rayeemomayeer/SpotSync/migrations"
 )
 
-// RunMigrations applies all pending up migrations from migrationsPath against databaseURL.
+// RunMigrations applies all pending up migrations embedded in the migrations package.
+// migrationsPath is retained for Makefile CLI parity; runtime migrate uses the embedded FS.
 func RunMigrations(databaseURL, migrationsPath string, log *slog.Logger) error {
-	absPath, err := filepath.Abs(migrationsPath)
+	_ = migrationsPath
+
+	source, err := iofs.New(appmigrations.Files, ".")
 	if err != nil {
-		return fmt.Errorf("resolve migrations path: %w", err)
+		return fmt.Errorf("open migration source: %w", err)
 	}
 
-	sourceURL := migrationSourceURL(absPath)
-	m, err := migrate.New(sourceURL, databaseURL)
+	m, err := migrate.NewWithSourceInstance("iofs", source, databaseURL)
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}
@@ -36,16 +38,13 @@ func RunMigrations(databaseURL, migrationsPath string, log *slog.Logger) error {
 	}
 
 	if log != nil {
-		log.Info("database migrations applied", "path", absPath)
+		log.Info("database migrations applied")
 	}
 
 	return nil
 }
 
-func migrationSourceURL(absPath string) string {
-	path := filepath.ToSlash(absPath)
-	if runtime.GOOS == "windows" {
-		return "file:///" + path
-	}
-	return "file://" + path
+// EmbeddedMigrationFiles returns the names of bundled migration SQL files (for tests).
+func EmbeddedMigrationFiles() ([]string, error) {
+	return fs.Glob(appmigrations.Files, "*.sql")
 }
