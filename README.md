@@ -5,7 +5,7 @@
 [![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-- **Live API:** `https://spotsync.fly.dev` *(set `FLY_API_TOKEN` in GitHub Actions and run deploy — see [Deployment](#deployment))*
+- **Live API:** _pending Render deploy — see [Deployment](#deployment)_
 - **API base path:** `/api/v1`
 
 ---
@@ -60,7 +60,7 @@ SpotSync treats that race as the central engineering problem. The reservation pa
 | Validation | go-playground/validator/v10 |
 | Auth | golang-jwt/jwt/v5 + bcrypt |
 | Migrations | golang-migrate (embedded SQL) |
-| Deploy | [Fly.io](https://fly.io/) |
+| Deploy | [Render](https://render.com/) (Docker web service) |
 
 ---
 
@@ -148,7 +148,7 @@ internal/
   middleware/         JWT, RBAC, logging, CORS
   platform/           DB, JWT, migrations, logger
 migrations/           Versioned SQL (embedded at runtime)
-deploy/               Docker, Compose, Fly.io config
+deploy/               Docker, Compose, Render blueprint
 test/
   contract/           Graded API spec replay
   integration/        testcontainers + race tests
@@ -294,42 +294,61 @@ The contract suite replays all nine endpoints against a real Postgres instance. 
 
 ## Deployment
 
-Production stack: **Neon** (Postgres) + **Fly.io** (API).
+Production stack: **Neon** (Postgres) + **Render** (API).
 
-### 1. Neon database
+### Render MCP (Cursor)
+
+SpotSync is configured to use Render's hosted MCP server so you can manage deploys from Cursor.
+
+1. Create an API key at [Render Account Settings → API Keys](https://dashboard.render.com/u/settings#api-keys).
+2. Set it as a **user environment variable** (Windows: Settings → System → Environment variables):
+   ```
+   RENDER_API_KEY=your-key-here
+   ```
+3. **Restart Cursor** so it picks up the MCP config (`~/.cursor/mcp.json` and `.cursor/mcp.json` in this repo).
+4. In Cursor chat, run: `Set my Render workspace to [YOUR_WORKSPACE]`
+5. Then prompt: _"Deploy SpotSync from this repo using render.yaml"_ or _"List my Render services"_.
+
+MCP endpoint: `https://mcp.render.com/mcp`
+
+### Option A — Blueprint (recommended)
+
+1. Push this repo to GitHub.
+2. In [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint**.
+3. Connect `rayeemomayeer/SpotSync` — Render reads `render.yaml` at the repo root.
+4. When prompted, set secrets:
+   - `DATABASE_URL` — your Neon pooled connection string (`sslmode=require`)
+   - `JWT_SECRET` — a long random string
+5. Deploy. Migrations run on startup (`MIGRATE_ON_STARTUP=true`).
+
+Verify:
+
+```bash
+curl https://spotsync.onrender.com/healthz
+curl https://spotsync.onrender.com/readyz
+```
+
+Update the **Live API** link at the top of this README with your Render URL (e.g. `https://spotsync.onrender.com`).
+
+### Option B — Manual web service
+
+1. **New → Web Service** → connect this GitHub repo.
+2. **Runtime:** Docker · **Dockerfile path:** `deploy/docker/Dockerfile`
+3. **Health check path:** `/healthz`
+4. Add environment variables from [Configuration](#configuration) (`DATABASE_URL`, `JWT_SECRET`, etc.).
+5. Create web service and deploy.
+
+### Neon database
+
+If you don't have Postgres yet:
 
 1. Create a project at [neon.tech](https://neon.tech/).
-2. Copy the pooled connection string (`?sslmode=require`).
-3. Store it as `DATABASE_URL`.
+2. Copy the **pooled** connection string with `sslmode=require`.
+3. Set it as `DATABASE_URL` on Render (not in git).
 
-### 2. Fly.io app
+### CORS
 
-```bash
-# Install flyctl: https://fly.io/docs/hands-on/install-flyctl/
-fly auth login
-fly apps create spotsync   # pick a unique name; update fly.toml if needed
-fly secrets set \
-  DATABASE_URL="postgres://..." \
-  JWT_SECRET="your-long-random-secret" \
-  ALLOW_SELF_ADMIN_REGISTRATION=true \
-  CORS_ALLOWED_ORIGINS="https://your-frontend.example"
-fly deploy
-```
-
-Migrations run automatically on each deploy (`MIGRATE_ON_STARTUP=true`).
-
-Health checks hit `/healthz`. Verify:
-
-```bash
-curl https://spotsync.fly.dev/healthz
-curl https://spotsync.fly.dev/readyz
-```
-
-### 3. GitHub Actions (push to main)
-
-Add repository secret `FLY_API_TOKEN` ([create token](https://fly.io/user/personal_access_tokens)). Pushes to `main` run `.github/workflows/deploy.yml`.
-
-After the first successful deploy, update the **Live API** link at the top of this README with your Fly app URL.
+Set `CORS_ALLOWED_ORIGINS` on Render to your frontend origin(s), comma-separated.
 
 ---
 

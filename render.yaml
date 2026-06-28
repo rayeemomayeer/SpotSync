@@ -1,0 +1,28 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+# Connect this repo in the Render Dashboard (New > Blueprint) or ask Cursor with Render MCP:
+#   "Deploy SpotSync from github.com/rayeemomayeer/SpotSync using render.yaml"
+
+services:
+  - type: web
+    name: spotsync
+    runtime: docker
+    dockerfilePath: deploy/docker/Dockerfile
+    dockerContext: .
+    plan: free
+    region: virginia
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: MIGRATE_ON_STARTUP
+        value: "true"
+      - key: ALLOW_SELF_ADMIN_REGISTRATION
+        value: "true"
+      - key: LOG_LEVEL
+        value: info
+      - key: BCRYPT_COST
+        value: "12"
+      - key: JWT_EXPIRY
+        value: 24h
