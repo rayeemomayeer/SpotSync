@@ -10,6 +10,7 @@ var (
 	ErrZoneFull           = errors.New("zone is full")
 	ErrConflict           = errors.New("conflict")
 	ErrDuplicateEmail     = errors.New("email already registered")
+	ErrNotOwner           = errors.New("not owner")
 )
 
 type ValidationError struct {
