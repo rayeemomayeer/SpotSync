@@ -5,7 +5,7 @@
 [![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-- **Live API:** _pending Render deploy — see [Deployment](#deployment)_
+- **Live API:** https://spotsync-ei6g.onrender.com
 - **API base path:** `/api/v1`
 
 ---
@@ -324,11 +324,9 @@ MCP endpoint: `https://mcp.render.com/mcp`
 Verify:
 
 ```bash
-curl https://spotsync.onrender.com/healthz
-curl https://spotsync.onrender.com/readyz
+curl https://spotsync-ei6g.onrender.com/healthz
+curl https://spotsync-ei6g.onrender.com/readyz
 ```
-
-Update the **Live API** link at the top of this README with your Render URL (e.g. `https://spotsync.onrender.com`).
 
 ### Option B — Manual web service
 
