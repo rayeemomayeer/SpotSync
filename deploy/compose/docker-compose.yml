@@ -16,5 +16,23 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    container_name: spotsync-api
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+      DATABASE_URL: postgres://spotsync:spotsync@postgres:5432/spotsync?sslmode=disable
+      JWT_SECRET: local-dev-secret-change-me
+      MIGRATE_ON_STARTUP: "true"
+      ALLOW_SELF_ADMIN_REGISTRATION: "true"
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+
 volumes:
   spotsync_pg_data:

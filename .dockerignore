@@ -1,0 +1,26 @@
+# Git
+.git
+.github
+
+# Local-only / secrets
+.env
+.env.*
+.cursor
+docs
+SpotSync_Flagship_Blueprint.md
+SpotSync_Execution_Plan.md
+main_readme.md
+
+# Build artifacts
+bin/
+tmp/
+*.test
+*.out
+coverage.out
+
+# IDE
+.idea
+.vscode
+
+# Test & load output
+test/load/results/
