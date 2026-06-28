@@ -65,7 +65,11 @@ test-race: ## Run tests with the race detector
 
 .PHONY: test-int
 test-int: ## Run integration tests (requires Docker)
-	go test -tags=integration ./test/integration/...
+	go test -tags=integration -race ./test/integration/...
+
+.PHONY: test-contract
+test-contract: ## Run contract replay tests (requires Docker)
+	go test -tags=integration -race ./test/contract/...
 
 .PHONY: cover
 cover: ## Run tests with coverage report

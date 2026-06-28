@@ -12,17 +12,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	echomw "github.com/labstack/echo/v4/middleware"
+	"github.com/rayeemomayeer/SpotSync/internal/app"
 	"github.com/rayeemomayeer/SpotSync/internal/config"
-	"github.com/rayeemomayeer/SpotSync/internal/handler"
-	appmw "github.com/rayeemomayeer/SpotSync/internal/middleware"
 	"github.com/rayeemomayeer/SpotSync/internal/platform"
-	"github.com/rayeemomayeer/SpotSync/internal/repository"
-	"github.com/rayeemomayeer/SpotSync/internal/service"
 )
-
-const authRateLimitPerMinute = 20
 
 func main() {
 	if err := run(); err != nil {
@@ -51,64 +44,10 @@ func run() error {
 		}
 	}
 
-	readiness := &handler.DBReadinessChecker{
-		PingFn: func(ctx context.Context) error {
-			sqlDB, err := db.DB()
-			if err != nil {
-				return err
-			}
-			return sqlDB.PingContext(ctx)
-		},
-	}
-
-	userRepo := repository.NewUserRepository(db)
-	zoneRepo := repository.NewZoneRepository(db)
-	reservationRepo := repository.NewReservationRepository(db)
-
-	tokenManager := platform.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiry)
-	authSvc := service.NewAuthService(userRepo, tokenManager, cfg.BcryptCost, cfg.AllowSelfAdminRegistration)
-	zoneSvc := service.NewZoneService(zoneRepo)
-	reservationSvc := service.NewReservationService(reservationRepo, zoneRepo)
-
-	authHandler := handler.NewAuthHandler(authSvc)
-	zoneHandler := handler.NewZoneHandler(zoneSvc)
-	reservationHandler := handler.NewReservationHandler(reservationSvc)
-
-	e := echo.New()
-	e.HideBanner = true
-	e.HidePort = true
-	e.Validator = handler.NewValidator()
-	e.HTTPErrorHandler = handler.HTTPErrorHandler
-
-	e.Use(echomw.Recover())
-	e.Use(appmw.RequestID())
-	e.Use(appmw.RequestLogger(log))
-	e.Use(appmw.CORS(cfg.CORSAllowedOrigins))
-
-	health := handler.NewHealthHandler(readiness)
-	e.GET("/healthz", health.Healthz)
-	e.GET("/readyz", health.Readyz)
-
-	jwtAuth := appmw.JWTAuth(tokenManager)
-	requireAdmin := appmw.RequireAdmin()
-	authRateLimit := appmw.IPRateLimit(authRateLimitPerMinute)
-
-	v1 := e.Group("/api/v1")
-
-	auth := v1.Group("/auth", authRateLimit)
-	auth.POST("/register", authHandler.Register)
-	auth.POST("/login", authHandler.Login)
-
-	zones := v1.Group("/zones")
-	zones.GET("", zoneHandler.List)
-	zones.GET("/:id", zoneHandler.GetByID)
-	zones.POST("", zoneHandler.Create, jwtAuth, requireAdmin)
-
-	reservations := v1.Group("/reservations", jwtAuth)
-	reservations.POST("", reservationHandler.Create)
-	reservations.GET("/my-reservations", reservationHandler.ListMine)
-	reservations.DELETE("/:id", reservationHandler.Cancel)
-	reservations.GET("", reservationHandler.ListAll, requireAdmin)
+	e := app.NewEcho(cfg, db, log, app.Options{
+		AuthRateLimitPerMinute: 20,
+		EnableRequestLogger:    true,
+	})
 
 	addr := ":" + cfg.Port
 	log.Info("starting api server", "addr", addr)

@@ -55,6 +55,9 @@ jobs:
       - name: go test (race)
         run: go test -race ./...
 
+      - name: integration and contract tests
+        run: go test -race -tags=integration ./test/integration/... ./test/contract/...
+
   build:
     name: build
     runs-on: ubuntu-latest
