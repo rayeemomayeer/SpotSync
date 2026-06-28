@@ -58,6 +58,8 @@ func run() error {
 	e := echo.New()
 	e.HideBanner = true
 	e.HidePort = true
+	e.Validator = handler.NewValidator()
+	e.HTTPErrorHandler = handler.HTTPErrorHandler
 
 	health := handler.NewHealthHandler(readiness)
 	e.GET("/healthz", health.Healthz)
