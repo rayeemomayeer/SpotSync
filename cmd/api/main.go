@@ -16,6 +16,8 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/config"
 	"github.com/rayeemomayeer/SpotSync/internal/handler"
 	"github.com/rayeemomayeer/SpotSync/internal/platform"
+	"github.com/rayeemomayeer/SpotSync/internal/repository"
+	"github.com/rayeemomayeer/SpotSync/internal/service"
 )
 
 func main() {
@@ -64,6 +66,16 @@ func run() error {
 	health := handler.NewHealthHandler(readiness)
 	e.GET("/healthz", health.Healthz)
 	e.GET("/readyz", health.Readyz)
+
+	userRepo := repository.NewUserRepository(db)
+	tokenManager := platform.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiry)
+	authSvc := service.NewAuthService(userRepo, tokenManager, cfg.BcryptCost, cfg.AllowSelfAdminRegistration)
+	authHandler := handler.NewAuthHandler(authSvc)
+
+	v1 := e.Group("/api/v1")
+	auth := v1.Group("/auth")
+	auth.POST("/register", authHandler.Register)
+	auth.POST("/login", authHandler.Login)
 
 	addr := ":" + cfg.Port
 	log.Info("starting api server", "addr", addr)
