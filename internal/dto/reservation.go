@@ -2,13 +2,11 @@ package dto
 
 import "time"
 
-// CreateReservationRequest is the body for POST /api/v1/reservations.
 type CreateReservationRequest struct {
 	ZoneID       uint   `json:"zone_id" validate:"required,gt=0"`
 	LicensePlate string `json:"license_plate" validate:"required,min=1,max=15"`
 }
 
-// ReservationResponse is the public reservation shape.
 type ReservationResponse struct {
 	ID           uint          `json:"id"`
 	UserID       uint          `json:"user_id"`
@@ -21,7 +19,6 @@ type ReservationResponse struct {
 	User         *UserResponse `json:"user,omitempty"`
 }
 
-// PaginationQuery holds optional list pagination (admin reservations).
 type PaginationQuery struct {
 	Page  int `query:"page" validate:"omitempty,min=1"`
 	Limit int `query:"limit" validate:"omitempty,min=1,max=100"`

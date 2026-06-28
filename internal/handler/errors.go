@@ -9,8 +9,6 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
 )
 
-// HTTPErrorHandler maps domain and transport errors to the graded error envelope.
-// Raw GORM/driver errors never reach the client.
 func HTTPErrorHandler(err error, c echo.Context) {
 	if c.Response().Committed {
 		return

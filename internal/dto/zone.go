@@ -2,7 +2,6 @@ package dto
 
 import "time"
 
-// CreateZoneRequest is the body for POST /api/v1/zones.
 type CreateZoneRequest struct {
 	Name          string  `json:"name" validate:"required,min=2,max=255"`
 	Type          string  `json:"type" validate:"required,oneof=general ev_charging covered"`
@@ -10,7 +9,6 @@ type CreateZoneRequest struct {
 	PricePerHour  float64 `json:"price_per_hour" validate:"required,gt=0"`
 }
 
-// ZoneResponse is the public zone shape including dynamic availability.
 type ZoneResponse struct {
 	ID             uint      `json:"id"`
 	Name           string    `json:"name"`

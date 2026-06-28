@@ -10,24 +10,20 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
 )
 
-// CustomValidator wraps go-playground/validator for Echo.
 type CustomValidator struct {
 	validate *validator.Validate
 }
 
-// NewValidator returns an Echo-compatible struct validator.
 func NewValidator() *CustomValidator {
 	v := validator.New(validator.WithRequiredStructEnabled())
 	v.RegisterTagNameFunc(jsonFieldName)
 	return &CustomValidator{validate: v}
 }
 
-// Validate implements echo.Validator.
 func (cv *CustomValidator) Validate(i any) error {
 	return cv.validate.Struct(i)
 }
 
-// BindAndValidate binds the request into dest and validates it.
 func BindAndValidate(c echo.Context, dest any) error {
 	if err := c.Bind(dest); err != nil {
 		return domain.NewValidationError("Invalid request body", map[string]string{
