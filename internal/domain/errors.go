@@ -11,8 +11,10 @@ var (
 	ErrConflict           = errors.New("conflict")
 	ErrDuplicateEmail     = errors.New("email already registered")
 	ErrNotOwner           = errors.New("not owner")
-	ErrSpotTaken          = errors.New("spot already taken")
-	ErrSpotUnavailable    = errors.New("spot unavailable")
+	ErrSpotTaken                 = errors.New("spot already taken")
+	ErrSpotUnavailable           = errors.New("spot unavailable")
+	ErrCapacityBelowActive       = errors.New("total capacity below active reservations")
+	ErrZoneHasActiveReservations = errors.New("zone has active reservations")
 )
 
 type ValidationError struct {

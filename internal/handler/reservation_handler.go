@@ -18,7 +18,7 @@ type ReservationService interface {
 	Create(ctx context.Context, userID uint, req dto.CreateReservationRequest, opts service.CreateReservationOptions) (dto.ReservationResponse, error)
 	Cancel(ctx context.Context, userID, reservationID uint) error
 	ListMine(ctx context.Context, userID uint) ([]dto.ReservationResponse, error)
-	ListAll(ctx context.Context, q dto.PaginationQuery) ([]dto.ReservationResponse, error)
+	ListAll(ctx context.Context, q dto.PaginationQuery) (service.ListAllResult, error)
 }
 
 type ReservationHandler struct {
@@ -97,12 +97,16 @@ func (h *ReservationHandler) ListAll(c echo.Context) error {
 		return err
 	}
 
-	list, err := h.reservations.ListAll(c.Request().Context(), q)
+	result, err := h.reservations.ListAll(c.Request().Context(), q)
 	if err != nil {
 		return err
 	}
+	list := result.Items
 	if list == nil {
 		list = []dto.ReservationResponse{}
+	}
+	if result.Paginated {
+		setPaginationHeaders(c, result.Total, result.Page, result.Limit)
 	}
 	return JSONSuccess(c, http.StatusOK, "Reservations retrieved successfully", list)
 }

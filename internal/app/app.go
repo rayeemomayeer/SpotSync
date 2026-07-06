@@ -34,7 +34,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 
 	tokenManager := platform.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiry)
 	authSvc := service.NewAuthService(userRepo, tokenManager, cfg.BcryptCost, cfg.AllowSelfAdminRegistration)
-	zoneSvc := service.NewZoneService(zoneRepo, spotRepo)
+	zoneSvc := service.NewZoneService(zoneRepo, spotRepo, reservationRepo)
 	reservationSvc := service.NewReservationService(reservationRepo, zoneRepo, cfg.DemoReservationTTL)
 	spotSvc := service.NewSpotService(spotRepo, reservationRepo)
 
@@ -86,6 +86,8 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 	zones.GET("/:id", zoneHandler.GetByID)
 	zones.GET("/:id/spots", spotHandler.ListByZone)
 	zones.POST("", zoneHandler.Create, jwtAuth, requireAdmin)
+	zones.PUT("/:id", zoneHandler.Update, jwtAuth, requireAdmin)
+	zones.DELETE("/:id", zoneHandler.Delete, jwtAuth, requireAdmin)
 	zones.PUT("/:id/spots/:spotId", spotHandler.UpdateStatus, jwtAuth, requireAdmin)
 
 	reservations := v1.Group("/reservations", jwtAuth)

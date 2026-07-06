@@ -58,7 +58,18 @@ func ShowcaseLayout(zoneID uint) []models.ParkingSpot {
 	return spots
 }
 
-// ColsForCapacity returns grid column count used for layout.
+// AppendGridLayout generates additional spots starting after existingCount.
+func AppendGridLayout(zoneID uint, existingCount, additional int) []models.ParkingSpot {
+	if additional < 1 {
+		return nil
+	}
+	all := GridLayout(zoneID, existingCount+additional)
+	if existingCount >= len(all) {
+		return nil
+	}
+	return all[existingCount:]
+}
+
 func ColsForCapacity(capacity int) int {
 	if capacity <= defaultCols {
 		return max(1, capacity)

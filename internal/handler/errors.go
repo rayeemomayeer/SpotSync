@@ -66,6 +66,14 @@ func mapError(err error) (status int, message string, fieldErrors map[string]str
 		return http.StatusConflict, "Email already registered", map[string]string{"email": "Email is already in use"}
 	case errors.Is(err, domain.ErrConflict):
 		return http.StatusConflict, "Conflict", fieldErrors
+	case errors.Is(err, domain.ErrCapacityBelowActive):
+		return http.StatusConflict, "Total capacity cannot be less than active reservations", map[string]string{
+			"total_capacity": "Cannot be less than the number of active reservations",
+		}
+	case errors.Is(err, domain.ErrZoneHasActiveReservations):
+		return http.StatusConflict, "Zone has active reservations", map[string]string{
+			"zone": "Cannot delete a zone with active reservations",
+		}
 	default:
 		return http.StatusInternalServerError, "Internal server error", fieldErrors
 	}

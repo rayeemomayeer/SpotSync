@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 
+	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/domain/spots"
 	"github.com/rayeemomayeer/SpotSync/internal/dto"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
@@ -12,21 +13,32 @@ import (
 type ZoneStore interface {
 	Create(ctx context.Context, zone *models.ParkingZone) error
 	ListWithAvailability(ctx context.Context) ([]repository.ZoneAvailabilityRow, error)
+	ListWithAvailabilityFiltered(ctx context.Context, f repository.ZoneListFilter) ([]repository.ZoneAvailabilityRow, error)
 	GetByIDWithAvailability(ctx context.Context, id uint) (*repository.ZoneAvailabilityRow, error)
+	Update(ctx context.Context, zone *models.ParkingZone) error
+	Delete(ctx context.Context, id uint) error
 }
 
-type SpotBatchCreator interface {
+type SpotZoneManager interface {
 	CreateBatch(ctx context.Context, spots []models.ParkingSpot) error
 	CountByZone(ctx context.Context, zoneID uint) (int64, error)
+	ListByZone(ctx context.Context, zoneID uint) ([]models.ParkingSpot, error)
+	DeleteByIDs(ctx context.Context, ids []uint) error
+	ActiveReservationSpotIDs(ctx context.Context, zoneID uint) (map[uint]struct{}, error)
+}
+
+type ZoneActiveCounter interface {
+	CountActiveByZone(ctx context.Context, zoneID uint) (int64, error)
 }
 
 type ZoneService struct {
-	zones ZoneStore
-	spots SpotBatchCreator
+	zones        ZoneStore
+	spots        SpotZoneManager
+	reservations ZoneActiveCounter
 }
 
-func NewZoneService(zones ZoneStore, spotCreator SpotBatchCreator) *ZoneService {
-	return &ZoneService{zones: zones, spots: spotCreator}
+func NewZoneService(zones ZoneStore, spots SpotZoneManager, reservations ZoneActiveCounter) *ZoneService {
+	return &ZoneService{zones: zones, spots: spots, reservations: reservations}
 }
 
 func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest) (dto.ZoneResponse, error) {
@@ -50,16 +62,18 @@ func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest) (dt
 	return dto.ZoneFromModel(*zone, zone.TotalCapacity), nil
 }
 
-func (s *ZoneService) List(ctx context.Context) ([]dto.ZoneResponse, error) {
-	rows, err := s.zones.ListWithAvailability(ctx)
+func (s *ZoneService) List(ctx context.Context, q dto.ZoneListQuery) ([]dto.ZoneResponse, error) {
+	filter := repository.ZoneListFilter{
+		Type:  q.Type,
+		Query: q.Q,
+		Sort:  q.Sort,
+		Order: q.Order,
+	}
+	rows, err := s.zones.ListWithAvailabilityFiltered(ctx, filter)
 	if err != nil {
 		return nil, err
 	}
-	out := make([]dto.ZoneResponse, len(rows))
-	for i, row := range rows {
-		out[i] = dto.ZoneFromModel(row.ParkingZone, row.AvailableSpots)
-	}
-	return out, nil
+	return mapZoneRows(rows), nil
 }
 
 func (s *ZoneService) GetByID(ctx context.Context, id uint) (dto.ZoneResponse, error) {
@@ -68,4 +82,102 @@ func (s *ZoneService) GetByID(ctx context.Context, id uint) (dto.ZoneResponse, e
 		return dto.ZoneResponse{}, err
 	}
 	return dto.ZoneFromModel(row.ParkingZone, row.AvailableSpots), nil
+}
+
+func (s *ZoneService) Update(ctx context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error) {
+	row, err := s.zones.GetByIDWithAvailability(ctx, id)
+	if err != nil {
+		return dto.ZoneResponse{}, err
+	}
+
+	if s.reservations != nil {
+		active, err := s.reservations.CountActiveByZone(ctx, id)
+		if err != nil {
+			return dto.ZoneResponse{}, err
+		}
+		if int64(req.TotalCapacity) < active {
+			return dto.ZoneResponse{}, domain.ErrCapacityBelowActive
+		}
+	}
+
+	zone := row.ParkingZone
+	oldCapacity := zone.TotalCapacity
+	zone.Name = req.Name
+	zone.Type = req.Type
+	zone.TotalCapacity = req.TotalCapacity
+	zone.PricePerHour = req.PricePerHour
+
+	if err := s.zones.Update(ctx, &zone); err != nil {
+		return dto.ZoneResponse{}, err
+	}
+
+	if s.spots != nil && req.TotalCapacity != oldCapacity {
+		if err := s.syncSpotCapacity(ctx, id, oldCapacity, req.TotalCapacity); err != nil {
+			return dto.ZoneResponse{}, err
+		}
+	}
+
+	return s.GetByID(ctx, id)
+}
+
+func (s *ZoneService) Delete(ctx context.Context, id uint) error {
+	return s.zones.Delete(ctx, id)
+}
+
+func (s *ZoneService) syncSpotCapacity(ctx context.Context, zoneID uint, oldCapacity, newCapacity int) error {
+	spotCount, err := s.spots.CountByZone(ctx, zoneID)
+	if err != nil {
+		return err
+	}
+	if spotCount == 0 {
+		if newCapacity > 0 {
+			return s.spots.CreateBatch(ctx, spots.GridLayout(zoneID, newCapacity))
+		}
+		return nil
+	}
+
+	current := int(spotCount)
+	if newCapacity > current {
+		additional := spots.AppendGridLayout(zoneID, current, newCapacity-current)
+		return s.spots.CreateBatch(ctx, additional)
+	}
+	if newCapacity < current {
+		return s.trimSpots(ctx, zoneID, current-newCapacity)
+	}
+	return nil
+}
+
+func (s *ZoneService) trimSpots(ctx context.Context, zoneID uint, removeCount int) error {
+	list, err := s.spots.ListByZone(ctx, zoneID)
+	if err != nil {
+		return err
+	}
+	if removeCount <= 0 || len(list) == 0 {
+		return nil
+	}
+
+	occupied, err := s.spots.ActiveReservationSpotIDs(ctx, zoneID)
+	if err != nil {
+		return err
+	}
+
+	var toDelete []uint
+	for i := len(list) - 1; i >= 0 && len(toDelete) < removeCount; i-- {
+		if _, taken := occupied[list[i].ID]; taken {
+			continue
+		}
+		toDelete = append(toDelete, list[i].ID)
+	}
+	if len(toDelete) < removeCount {
+		return domain.ErrCapacityBelowActive
+	}
+	return s.spots.DeleteByIDs(ctx, toDelete)
+}
+
+func mapZoneRows(rows []repository.ZoneAvailabilityRow) []dto.ZoneResponse {
+	out := make([]dto.ZoneResponse, len(rows))
+	for i, row := range rows {
+		out[i] = dto.ZoneFromModel(row.ParkingZone, row.AvailableSpots)
+	}
+	return out
 }

@@ -230,9 +230,48 @@ Base path: `/api/v1`. All responses use a consistent envelope.
 | 6 | POST | `/reservations` | Auth | Reserve a spot (`201` / `409`) |
 | 7 | GET | `/reservations/my-reservations` | Auth | List caller's reservations |
 | 8 | DELETE | `/reservations/:id` | Auth | Cancel own reservation (`403` if not owner) |
-| 9 | GET | `/reservations` | Admin | List all (optional `?page` & `?limit`) |
+| 9 | GET | `/reservations` | Admin | List all (optional `?page` & `?limit`; pagination headers when present) |
 
-### Examples
+### Frontend-enablement endpoints (additive)
+
+| Method | Endpoint | Access | Description |
+| --- | --- | --- | --- |
+| GET | `/auth/me` | Auth | Current user profile from JWT (`200`) |
+| PUT | `/zones/:id` | Admin | Update zone fields (`200`; `409` if `total_capacity` &lt; active reservations) |
+| DELETE | `/zones/:id` | Admin | Delete zone (`200`; `409` if active reservations remain) |
+| GET | `/zones/:id/spots` | Public | List bookable spots with occupancy (`200`) |
+| PUT | `/zones/:id/spots/:spotId` | Admin | Toggle spot availability (`200`) |
+
+**Zone list filters** (all optional on `GET /zones`; omitted params preserve the full-array contract):
+
+| Param | Values | Purpose |
+| --- | --- | --- |
+| `type` | `general`, `ev_charging`, `covered` | Filter by zone type |
+| `q` | string | Case-insensitive name search |
+| `sort` | `available_spots`, `price_per_hour`, `name` | Sort field |
+| `order` | `asc`, `desc` | Sort direction |
+
+**Admin pagination headers** — when `GET /reservations` includes `?page` and/or `?limit`, the response adds:
+
+| Header | Description |
+| --- | --- |
+| `X-Total-Count` | Total reservations across all pages |
+| `X-Page` | Current page (default `1`) |
+| `X-Limit` | Page size (default `20`, max `100`) |
+
+Expose these headers via CORS (`ExposeHeaders`) so browser clients can build admin tables.
+
+### Frontend integration
+
+| Topic | Detail |
+| --- | --- |
+| Base URL | `https://<api-host>/api/v1` (local: `http://localhost:8080/api/v1`) |
+| Auth | `Authorization: Bearer <token>` on protected routes |
+| Envelope | `{success, message, data}` on success; `{success, message, errors}` on failure |
+| Session | Call `GET /auth/me` on app load to rehydrate user name/email/role |
+| CORS | Set `CORS_ALLOWED_ORIGINS` to your frontend origin (e.g. `http://localhost:3000`, Vercel URL) |
+| Demo bookings | Optional header `X-Demo-Reservation: true` on `POST /reservations` |
+
 
 **Register**
 

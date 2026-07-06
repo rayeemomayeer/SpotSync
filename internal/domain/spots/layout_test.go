@@ -15,3 +15,14 @@ func TestShowcaseLayout(t *testing.T) {
 		t.Fatalf("label = %q", layout[0].Label)
 	}
 }
+
+func TestAppendGridLayout(t *testing.T) {
+	all := spots.GridLayout(1, 8)
+	added := spots.AppendGridLayout(1, 5, 3)
+	if len(added) != 3 {
+		t.Fatalf("len=%d", len(added))
+	}
+	if added[0].Label != all[5].Label {
+		t.Fatalf("label=%q want %q", added[0].Label, all[5].Label)
+	}
+}

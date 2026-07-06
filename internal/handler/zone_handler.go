@@ -10,8 +10,10 @@ import (
 
 type ZoneService interface {
 	Create(ctx context.Context, req dto.CreateZoneRequest) (dto.ZoneResponse, error)
-	List(ctx context.Context) ([]dto.ZoneResponse, error)
+	List(ctx context.Context, q dto.ZoneListQuery) ([]dto.ZoneResponse, error)
 	GetByID(ctx context.Context, id uint) (dto.ZoneResponse, error)
+	Update(ctx context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error)
+	Delete(ctx context.Context, id uint) error
 }
 
 type ZoneHandler struct {
@@ -37,7 +39,12 @@ func (h *ZoneHandler) Create(c echo.Context) error {
 }
 
 func (h *ZoneHandler) List(c echo.Context) error {
-	zones, err := h.zones.List(c.Request().Context())
+	var q dto.ZoneListQuery
+	if err := BindAndValidate(c, &q); err != nil {
+		return err
+	}
+
+	zones, err := h.zones.List(c.Request().Context(), q)
 	if err != nil {
 		return err
 	}
@@ -59,4 +66,36 @@ func (h *ZoneHandler) GetByID(c echo.Context) error {
 	}
 
 	return JSONSuccess(c, http.StatusOK, "Zone retrieved successfully", zone)
+}
+
+func (h *ZoneHandler) Update(c echo.Context) error {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+
+	var req dto.UpdateZoneRequest
+	if err := BindAndValidate(c, &req); err != nil {
+		return err
+	}
+
+	zone, err := h.zones.Update(c.Request().Context(), id, req)
+	if err != nil {
+		return err
+	}
+
+	return JSONSuccess(c, http.StatusOK, "Zone updated successfully", zone)
+}
+
+func (h *ZoneHandler) Delete(c echo.Context) error {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+
+	if err := h.zones.Delete(c.Request().Context(), id); err != nil {
+		return err
+	}
+
+	return NoContentSuccess(c, "Zone deleted successfully")
 }

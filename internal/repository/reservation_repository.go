@@ -187,6 +187,12 @@ func (r *ReservationRepository) ListByUser(ctx context.Context, userID uint) ([]
 	return list, err
 }
 
+func (r *ReservationRepository) CountAll(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&models.Reservation{}).Count(&count).Error
+	return count, err
+}
+
 func (r *ReservationRepository) ListAll(ctx context.Context, page, limit int) ([]models.Reservation, error) {
 	q := r.db.WithContext(ctx).
 		Preload("User").

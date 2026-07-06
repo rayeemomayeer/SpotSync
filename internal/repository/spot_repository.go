@@ -79,6 +79,13 @@ func (r *SpotRepository) ActiveReservationSpotIDs(ctx context.Context, zoneID ui
 	return out, nil
 }
 
+func (r *SpotRepository) DeleteByIDs(ctx context.Context, ids []uint) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Delete(&models.ParkingSpot{}, ids).Error
+}
+
 func (r *SpotRepository) CancelExpiredDemoReservations(ctx context.Context, now time.Time) error {
 	return r.db.WithContext(ctx).
 		Model(&models.Reservation{}).

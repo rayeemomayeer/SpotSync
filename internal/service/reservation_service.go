@@ -15,7 +15,16 @@ type ReservationStore interface {
 	Cancel(ctx context.Context, reservationID, userID uint) error
 	ListByUser(ctx context.Context, userID uint) ([]models.Reservation, error)
 	ListAll(ctx context.Context, page, limit int) ([]models.Reservation, error)
+	CountAll(ctx context.Context) (int64, error)
 	HasActiveOnSpot(ctx context.Context, spotID uint) (bool, error)
+}
+
+type ListAllResult struct {
+	Items     []dto.ReservationResponse
+	Total     int64
+	Page      int
+	Limit     int
+	Paginated bool
 }
 
 type CreateReservationOptions struct {
@@ -66,9 +75,10 @@ func (s *ReservationService) ListMine(ctx context.Context, userID uint) ([]dto.R
 	return s.mapReservationsWithZones(ctx, list)
 }
 
-func (s *ReservationService) ListAll(ctx context.Context, q dto.PaginationQuery) ([]dto.ReservationResponse, error) {
+func (s *ReservationService) ListAll(ctx context.Context, q dto.PaginationQuery) (ListAllResult, error) {
 	page, limit := 0, 0
-	if q.Page > 0 || q.Limit > 0 {
+	paginated := q.Page > 0 || q.Limit > 0
+	if paginated {
 		page = q.Page
 		limit = q.Limit
 		if page < 1 {
@@ -81,9 +91,28 @@ func (s *ReservationService) ListAll(ctx context.Context, q dto.PaginationQuery)
 
 	list, err := s.reservations.ListAll(ctx, page, limit)
 	if err != nil {
-		return nil, err
+		return ListAllResult{}, err
 	}
-	return s.mapReservationsWithZones(ctx, list)
+	items, err := s.mapReservationsWithZones(ctx, list)
+	if err != nil {
+		return ListAllResult{}, err
+	}
+
+	var total int64
+	if paginated {
+		total, err = s.reservations.CountAll(ctx)
+		if err != nil {
+			return ListAllResult{}, err
+		}
+	}
+
+	return ListAllResult{
+		Items:     items,
+		Total:     total,
+		Page:      page,
+		Limit:     limit,
+		Paginated: paginated,
+	}, nil
 }
 
 func (s *ReservationService) mapReservationsWithZones(ctx context.Context, list []models.Reservation) ([]dto.ReservationResponse, error) {
