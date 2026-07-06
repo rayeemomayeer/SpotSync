@@ -20,6 +20,7 @@ const (
 	defaultDBMaxIdleConns    = 5
 	defaultDBConnMaxLifetime = 5 * time.Minute
 	defaultMigrateOnStartup  = true
+	defaultDemoReservationTTL = 10 * time.Minute
 )
 
 // Config holds validated application settings loaded from the environment.
@@ -37,6 +38,7 @@ type Config struct {
 	DBConnMaxLifetime          time.Duration
 	MigrateOnStartup           bool
 	MigrationsPath             string
+	DemoReservationTTL         time.Duration
 }
 
 // Load reads configuration from the environment and fails fast on missing required values.
@@ -124,6 +126,16 @@ func (c *Config) parseOptionalFields() error {
 	}
 
 	c.MigrateOnStartup = parseBoolEnv("MIGRATE_ON_STARTUP", defaultMigrateOnStartup)
+
+	if raw := strings.TrimSpace(os.Getenv("DEMO_RESERVATION_TTL")); raw != "" {
+		d, err := time.ParseDuration(raw)
+		if err != nil {
+			return fmt.Errorf("DEMO_RESERVATION_TTL: invalid duration %q: %w", raw, err)
+		}
+		c.DemoReservationTTL = d
+	} else {
+		c.DemoReservationTTL = defaultDemoReservationTTL
+	}
 
 	return nil
 }

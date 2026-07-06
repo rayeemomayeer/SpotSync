@@ -14,6 +14,7 @@ import (
 type UserStore interface {
 	Create(ctx context.Context, user *models.User) error
 	FindByEmail(ctx context.Context, email string) (*models.User, error)
+	FindByID(ctx context.Context, id uint) (*models.User, error)
 }
 
 type AuthService struct {
@@ -70,6 +71,17 @@ func (s *AuthService) Login(ctx context.Context, req dto.LoginRequest) (dto.Logi
 		Token: token,
 		User:  dto.UserFromModel(*user),
 	}, nil
+}
+
+func (s *AuthService) Me(ctx context.Context, userID uint) (dto.UserResponse, error) {
+	user, err := s.users.FindByID(ctx, userID)
+	if err != nil {
+		return dto.UserResponse{}, err
+	}
+	if user == nil {
+		return dto.UserResponse{}, domain.ErrUnauthorized
+	}
+	return dto.UserFromModel(*user), nil
 }
 
 func resolveRegistrationRole(requested string, allowSelfAdmin bool) string {

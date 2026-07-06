@@ -2,29 +2,52 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/rayeemomayeer/SpotSync/internal/dto"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
+	"github.com/rayeemomayeer/SpotSync/internal/repository"
 )
 
 type ReservationStore interface {
 	CreateActive(ctx context.Context, userID, zoneID uint, licensePlate string) (*models.Reservation, error)
+	CreateActiveWithOptions(ctx context.Context, p repository.CreateReservationParams) (*models.Reservation, error)
 	Cancel(ctx context.Context, reservationID, userID uint) error
 	ListByUser(ctx context.Context, userID uint) ([]models.Reservation, error)
 	ListAll(ctx context.Context, page, limit int) ([]models.Reservation, error)
+	HasActiveOnSpot(ctx context.Context, spotID uint) (bool, error)
+}
+
+type CreateReservationOptions struct {
+	DemoReservation bool
 }
 
 type ReservationService struct {
 	reservations ReservationStore
 	zones        ZoneStore
+	demoTTL      time.Duration
 }
 
-func NewReservationService(reservations ReservationStore, zones ZoneStore) *ReservationService {
-	return &ReservationService{reservations: reservations, zones: zones}
+func NewReservationService(reservations ReservationStore, zones ZoneStore, demoTTL time.Duration) *ReservationService {
+	if demoTTL < 1 {
+		demoTTL = defaultDemoReservationTTL
+	}
+	return &ReservationService{reservations: reservations, zones: zones, demoTTL: demoTTL}
 }
 
-func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.CreateReservationRequest) (dto.ReservationResponse, error) {
-	res, err := s.reservations.CreateActive(ctx, userID, req.ZoneID, req.LicensePlate)
+func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.CreateReservationRequest, opts CreateReservationOptions) (dto.ReservationResponse, error) {
+	params := repository.CreateReservationParams{
+		UserID:       userID,
+		ZoneID:       req.ZoneID,
+		LicensePlate: req.LicensePlate,
+		SpotID:       req.SpotID,
+	}
+	if opts.DemoReservation {
+		expires := time.Now().Add(s.demoTTL)
+		params.DemoExpiresAt = &expires
+	}
+
+	res, err := s.reservations.CreateActiveWithOptions(ctx, params)
 	if err != nil {
 		return dto.ReservationResponse{}, err
 	}

@@ -10,13 +10,13 @@ func CORS(allowedOrigins []string) echo.MiddlewareFunc {
 		return echomw.CORSWithConfig(echomw.CORSConfig{
 			AllowOrigins: []string{"*"},
 			AllowMethods: []string{echo.GET, echo.POST, echo.PUT, echo.PATCH, echo.DELETE, echo.OPTIONS},
-			AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, echo.HeaderXRequestID},
+			AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, echo.HeaderXRequestID, "X-Demo-Reservation"},
 		})
 	}
 
 	return echomw.CORSWithConfig(echomw.CORSConfig{
 		AllowOrigins: allowedOrigins,
 		AllowMethods: []string{echo.GET, echo.POST, echo.PUT, echo.PATCH, echo.DELETE, echo.OPTIONS},
-		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, echo.HeaderXRequestID},
+		AllowHeaders: []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization, echo.HeaderXRequestID, "X-Demo-Reservation"},
 	})
 }

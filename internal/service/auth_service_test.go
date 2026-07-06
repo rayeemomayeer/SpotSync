@@ -43,6 +43,16 @@ func (m *mockUserStore) FindByEmail(_ context.Context, email string) (*models.Us
 	return &copy, nil
 }
 
+func (m *mockUserStore) FindByID(_ context.Context, id uint) (*models.User, error) {
+	for _, user := range m.byEmail {
+		if user.ID == id {
+			copy := *user
+			return &copy, nil
+		}
+	}
+	return nil, nil
+}
+
 func newTestAuthService(store *mockUserStore, allowAdmin bool) *service.AuthService {
 	tokens := platform.NewTokenManager("test-secret-key", time.Hour)
 	return service.NewAuthService(store, tokens, bcrypt.MinCost, allowAdmin)

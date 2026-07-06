@@ -3,15 +3,19 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/dto"
 	"github.com/rayeemomayeer/SpotSync/internal/middleware"
+	"github.com/rayeemomayeer/SpotSync/internal/service"
 )
 
+const demoReservationHeader = "X-Demo-Reservation"
+
 type ReservationService interface {
-	Create(ctx context.Context, userID uint, req dto.CreateReservationRequest) (dto.ReservationResponse, error)
+	Create(ctx context.Context, userID uint, req dto.CreateReservationRequest, opts service.CreateReservationOptions) (dto.ReservationResponse, error)
 	Cancel(ctx context.Context, userID, reservationID uint) error
 	ListMine(ctx context.Context, userID uint) ([]dto.ReservationResponse, error)
 	ListAll(ctx context.Context, q dto.PaginationQuery) ([]dto.ReservationResponse, error)
@@ -36,12 +40,21 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 		return err
 	}
 
-	res, err := h.reservations.Create(c.Request().Context(), userID, req)
+	opts := service.CreateReservationOptions{
+		DemoReservation: isDemoReservation(c),
+	}
+
+	res, err := h.reservations.Create(c.Request().Context(), userID, req, opts)
 	if err != nil {
 		return err
 	}
 
 	return JSONSuccess(c, http.StatusCreated, "Reservation created successfully", res)
+}
+
+func isDemoReservation(c echo.Context) bool {
+	v := strings.TrimSpace(c.Request().Header.Get(demoReservationHeader))
+	return strings.EqualFold(v, "true") || v == "1"
 }
 
 func (h *ReservationHandler) ListMine(c echo.Context) error {

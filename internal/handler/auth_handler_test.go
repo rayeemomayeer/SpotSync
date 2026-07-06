@@ -17,6 +17,7 @@ import (
 type stubAuthService struct {
 	registerFn func(ctx context.Context, req dto.RegisterRequest) (dto.UserResponse, error)
 	loginFn    func(ctx context.Context, req dto.LoginRequest) (dto.LoginData, error)
+	meFn       func(ctx context.Context, userID uint) (dto.UserResponse, error)
 }
 
 func (s *stubAuthService) Register(ctx context.Context, req dto.RegisterRequest) (dto.UserResponse, error) {
@@ -25,6 +26,13 @@ func (s *stubAuthService) Register(ctx context.Context, req dto.RegisterRequest)
 
 func (s *stubAuthService) Login(ctx context.Context, req dto.LoginRequest) (dto.LoginData, error) {
 	return s.loginFn(ctx, req)
+}
+
+func (s *stubAuthService) Me(ctx context.Context, userID uint) (dto.UserResponse, error) {
+	if s.meFn != nil {
+		return s.meFn(ctx, userID)
+	}
+	return dto.UserResponse{ID: userID}, nil
 }
 
 func TestAuthHandler_Register(t *testing.T) {

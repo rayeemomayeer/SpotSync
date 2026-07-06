@@ -30,15 +30,18 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 	userRepo := repository.NewUserRepository(db)
 	zoneRepo := repository.NewZoneRepository(db)
 	reservationRepo := repository.NewReservationRepository(db)
+	spotRepo := repository.NewSpotRepository(db)
 
 	tokenManager := platform.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiry)
 	authSvc := service.NewAuthService(userRepo, tokenManager, cfg.BcryptCost, cfg.AllowSelfAdminRegistration)
-	zoneSvc := service.NewZoneService(zoneRepo)
-	reservationSvc := service.NewReservationService(reservationRepo, zoneRepo)
+	zoneSvc := service.NewZoneService(zoneRepo, spotRepo)
+	reservationSvc := service.NewReservationService(reservationRepo, zoneRepo, cfg.DemoReservationTTL)
+	spotSvc := service.NewSpotService(spotRepo, reservationRepo)
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	zoneHandler := handler.NewZoneHandler(zoneSvc)
 	reservationHandler := handler.NewReservationHandler(reservationSvc)
+	spotHandler := handler.NewSpotHandler(spotSvc)
 
 	readiness := &handler.DBReadinessChecker{
 		PingFn: func(ctx context.Context) error {
@@ -76,11 +79,14 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 	auth := v1.Group("/auth", authRateLimit)
 	auth.POST("/register", authHandler.Register)
 	auth.POST("/login", authHandler.Login)
+	auth.GET("/me", authHandler.Me, jwtAuth)
 
 	zones := v1.Group("/zones")
 	zones.GET("", zoneHandler.List)
 	zones.GET("/:id", zoneHandler.GetByID)
+	zones.GET("/:id/spots", spotHandler.ListByZone)
 	zones.POST("", zoneHandler.Create, jwtAuth, requireAdmin)
+	zones.PUT("/:id/spots/:spotId", spotHandler.UpdateStatus, jwtAuth, requireAdmin)
 
 	reservations := v1.Group("/reservations", jwtAuth)
 	reservations.POST("", reservationHandler.Create)

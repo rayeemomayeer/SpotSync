@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/rayeemomayeer/SpotSync/internal/config"
+	"github.com/rayeemomayeer/SpotSync/internal/domain/spots"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
 	"github.com/rayeemomayeer/SpotSync/internal/platform"
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
@@ -54,6 +55,7 @@ func run() error {
 	userRepo := repository.NewUserRepository(db)
 	zoneRepo := repository.NewZoneRepository(db)
 	resRepo := repository.NewReservationRepository(db)
+	spotRepo := repository.NewSpotRepository(db)
 
 	admin, err := ensureUser(ctx, userRepo, cfg.BcryptCost, name, email, password, models.RoleAdmin, log)
 	if err != nil {
@@ -70,19 +72,20 @@ func run() error {
 		return err
 	}
 
-	zones, err := ensureZones(ctx, zoneRepo, log)
+	zoneList, err := ensureZones(ctx, zoneRepo, spotRepo, log)
 	if err != nil {
 		return err
 	}
 
-	if err := ensureReservations(ctx, resRepo, driverAlice, driverBob, zones, log); err != nil {
+	if err := ensureReservations(ctx, resRepo, driverAlice, driverBob, zoneList, log); err != nil {
 		return err
 	}
 
 	log.Info("seed complete",
 		"admin_email", admin.Email,
 		"driver_emails", []string{driverAlice.Email, driverBob.Email},
-		"zones", len(zones),
+		"zones", len(zoneList),
+		"demo_driver_password", "DriverPass123!",
 	)
 	return nil
 }
@@ -127,16 +130,17 @@ type demoZone struct {
 	Type          string
 	TotalCapacity int
 	PricePerHour  float64
+	Showcase      bool
 }
 
 var demoZones = []demoZone{
 	{Name: "Downtown Garage", Type: models.ZoneTypeGeneral, TotalCapacity: 50, PricePerHour: 4.50},
-	{Name: "EV Charging Hub", Type: models.ZoneTypeEVCharging, TotalCapacity: 12, PricePerHour: 6.00},
+	{Name: "Terminal 1 · EV Lot A", Type: models.ZoneTypeEVCharging, TotalCapacity: 24, PricePerHour: 6.00, Showcase: true},
 	{Name: "Airport Covered Lot", Type: models.ZoneTypeCovered, TotalCapacity: 30, PricePerHour: 8.25},
 }
 
-func ensureZones(ctx context.Context, repo *repository.ZoneRepository, log *slog.Logger) ([]models.ParkingZone, error) {
-	existing, err := repo.ListWithAvailability(ctx)
+func ensureZones(ctx context.Context, zoneRepo *repository.ZoneRepository, spotRepo *repository.SpotRepository, log *slog.Logger) ([]models.ParkingZone, error) {
+	existing, err := zoneRepo.ListWithAvailability(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -145,6 +149,9 @@ func ensureZones(ctx context.Context, repo *repository.ZoneRepository, log *slog
 		zones := make([]models.ParkingZone, len(existing))
 		for i, row := range existing {
 			zones[i] = row.ParkingZone
+		}
+		if err := backfillSpots(ctx, spotRepo, zones, log); err != nil {
+			return nil, err
 		}
 		return zones, nil
 	}
@@ -157,13 +164,41 @@ func ensureZones(ctx context.Context, repo *repository.ZoneRepository, log *slog
 			TotalCapacity: spec.TotalCapacity,
 			PricePerHour:  spec.PricePerHour,
 		}
-		if err := repo.Create(ctx, zone); err != nil {
+		if err := zoneRepo.Create(ctx, zone); err != nil {
 			return nil, err
 		}
-		log.Info("zone created", "name", zone.Name, "id", zone.ID, "capacity", zone.TotalCapacity)
+		layout := spots.GridLayout(zone.ID, zone.TotalCapacity)
+		if spec.Showcase {
+			layout = spots.ShowcaseLayout(zone.ID)
+		}
+		if err := spotRepo.CreateBatch(ctx, layout); err != nil {
+			return nil, err
+		}
+		log.Info("zone created", "name", zone.Name, "id", zone.ID, "capacity", zone.TotalCapacity, "spots", len(layout))
 		zones = append(zones, *zone)
 	}
 	return zones, nil
+}
+
+func backfillSpots(ctx context.Context, spotRepo *repository.SpotRepository, zones []models.ParkingZone, log *slog.Logger) error {
+	for _, zone := range zones {
+		count, err := spotRepo.CountByZone(ctx, zone.ID)
+		if err != nil {
+			return err
+		}
+		if count > 0 {
+			continue
+		}
+		layout := spots.GridLayout(zone.ID, zone.TotalCapacity)
+		if zone.Name == "Terminal 1 · EV Lot A" {
+			layout = spots.ShowcaseLayout(zone.ID)
+		}
+		if err := spotRepo.CreateBatch(ctx, layout); err != nil {
+			return err
+		}
+		log.Info("spots backfilled", "zone", zone.Name, "count", len(layout))
+	}
+	return nil
 }
 
 type demoReservation struct {

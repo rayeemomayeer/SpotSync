@@ -5,18 +5,21 @@ import "time"
 type CreateReservationRequest struct {
 	ZoneID       uint   `json:"zone_id" validate:"required,gt=0"`
 	LicensePlate string `json:"license_plate" validate:"required,min=1,max=15"`
+	SpotID       *uint  `json:"spot_id" validate:"omitempty,gt=0"`
 }
 
 type ReservationResponse struct {
 	ID           uint          `json:"id"`
 	UserID       uint          `json:"user_id"`
 	ZoneID       uint          `json:"zone_id"`
+	SpotID       *uint         `json:"spot_id,omitempty"`
 	LicensePlate string        `json:"license_plate"`
 	Status       string        `json:"status"`
 	CreatedAt    time.Time     `json:"created_at"`
 	UpdatedAt    time.Time     `json:"updated_at"`
 	Zone         *ZoneResponse `json:"zone,omitempty"`
 	User         *UserResponse `json:"user,omitempty"`
+	Spot         *SpotResponse `json:"spot,omitempty"`
 }
 
 type PaginationQuery struct {

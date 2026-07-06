@@ -28,11 +28,26 @@ func ZoneFromModel(z models.ParkingZone, availableSpots int) ZoneResponse {
 	}
 }
 
+func SpotFromModel(s models.ParkingSpot, occupied bool) SpotResponse {
+	return SpotResponse{
+		ID:        s.ID,
+		ZoneID:    s.ZoneID,
+		Label:     s.Label,
+		PosX:      s.PosX,
+		PosY:      s.PosY,
+		Status:    s.Status,
+		Occupied:  occupied,
+		CreatedAt: s.CreatedAt,
+		UpdatedAt: s.UpdatedAt,
+	}
+}
+
 func ReservationFromModel(r models.Reservation) ReservationResponse {
 	resp := ReservationResponse{
 		ID:           r.ID,
 		UserID:       r.UserID,
 		ZoneID:       r.ZoneID,
+		SpotID:       r.SpotID,
 		LicensePlate: r.LicensePlate,
 		Status:       r.Status,
 		CreatedAt:    r.CreatedAt,
@@ -46,6 +61,10 @@ func ReservationFromModel(r models.Reservation) ReservationResponse {
 	if r.User.ID != 0 {
 		user := UserFromModel(r.User)
 		resp.User = &user
+	}
+	if r.Spot != nil && r.Spot.ID != 0 {
+		spot := SpotFromModel(*r.Spot, r.Status == models.ReservationStatusActive)
+		resp.Spot = &spot
 	}
 
 	return resp

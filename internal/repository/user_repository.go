@@ -37,6 +37,18 @@ func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*models
 	return &user, nil
 }
 
+func (r *UserRepository) FindByID(ctx context.Context, id uint) (*models.User, error) {
+	var user models.User
+	err := r.db.WithContext(ctx).First(&user, id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
 func mapUserWriteErr(err error) error {
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
 		return domain.ErrDuplicateEmail

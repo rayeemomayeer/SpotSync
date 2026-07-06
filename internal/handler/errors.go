@@ -58,6 +58,10 @@ func mapError(err error) (status int, message string, fieldErrors map[string]str
 		return http.StatusForbidden, "Forbidden", fieldErrors
 	case errors.Is(err, domain.ErrZoneFull):
 		return http.StatusConflict, "Zone is full", fieldErrors
+	case errors.Is(err, domain.ErrSpotTaken):
+		return http.StatusConflict, "Spot is already taken", fieldErrors
+	case errors.Is(err, domain.ErrSpotUnavailable):
+		return http.StatusConflict, "Spot is unavailable", fieldErrors
 	case errors.Is(err, domain.ErrDuplicateEmail):
 		return http.StatusConflict, "Email already registered", map[string]string{"email": "Email is already in use"}
 	case errors.Is(err, domain.ErrConflict):
