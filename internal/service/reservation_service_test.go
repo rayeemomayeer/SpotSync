@@ -89,6 +89,15 @@ func (m *mockZoneStore) GetByIDWithAvailability(ctx context.Context, id uint) (*
 	return m.getFn(ctx, id)
 }
 
+func (m *mockZoneStore) FindByID(ctx context.Context, id uint) (*models.ParkingZone, error) {
+	row, err := m.getFn(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	z := row.ParkingZone
+	return &z, nil
+}
+
 func (m *mockZoneStore) Update(ctx context.Context, zone *models.ParkingZone) error {
 	if m.updateFn != nil {
 		return m.updateFn(ctx, zone)

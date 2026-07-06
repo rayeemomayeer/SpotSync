@@ -15,6 +15,7 @@ type ZoneStore interface {
 	ListWithAvailability(ctx context.Context) ([]repository.ZoneAvailabilityRow, error)
 	ListWithAvailabilityFiltered(ctx context.Context, f repository.ZoneListFilter) ([]repository.ZoneAvailabilityRow, error)
 	GetByIDWithAvailability(ctx context.Context, id uint) (*repository.ZoneAvailabilityRow, error)
+	FindByID(ctx context.Context, id uint) (*models.ParkingZone, error)
 	Update(ctx context.Context, zone *models.ParkingZone) error
 	Delete(ctx context.Context, id uint) error
 }
@@ -57,9 +58,12 @@ func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest) (dt
 		if err := s.spots.CreateBatch(ctx, layout); err != nil {
 			return dto.ZoneResponse{}, err
 		}
+		if err := s.syncZoneTotalCapacity(ctx, zone.ID); err != nil {
+			return dto.ZoneResponse{}, err
+		}
 	}
 
-	return dto.ZoneFromModel(*zone, zone.TotalCapacity), nil
+	return s.GetByID(ctx, zone.ID)
 }
 
 func (s *ZoneService) List(ctx context.Context, q dto.ZoneListQuery) ([]dto.ZoneResponse, error) {
@@ -113,6 +117,9 @@ func (s *ZoneService) Update(ctx context.Context, id uint, req dto.UpdateZoneReq
 
 	if s.spots != nil && req.TotalCapacity != oldCapacity {
 		if err := s.syncSpotCapacity(ctx, id, oldCapacity, req.TotalCapacity); err != nil {
+			return dto.ZoneResponse{}, err
+		}
+		if err := s.syncZoneTotalCapacity(ctx, id); err != nil {
 			return dto.ZoneResponse{}, err
 		}
 	}
@@ -172,6 +179,29 @@ func (s *ZoneService) trimSpots(ctx context.Context, zoneID uint, removeCount in
 		return domain.ErrCapacityBelowActive
 	}
 	return s.spots.DeleteByIDs(ctx, toDelete)
+}
+
+func (s *ZoneService) syncZoneTotalCapacity(ctx context.Context, zoneID uint) error {
+	if s.spots == nil {
+		return nil
+	}
+	count, err := s.spots.CountByZone(ctx, zoneID)
+	if err != nil {
+		return err
+	}
+	if count < 1 {
+		return nil
+	}
+	zone, err := s.zones.FindByID(ctx, zoneID)
+	if err != nil {
+		return err
+	}
+	capacity := int(count)
+	if zone.TotalCapacity == capacity {
+		return nil
+	}
+	zone.TotalCapacity = capacity
+	return s.zones.Update(ctx, zone)
 }
 
 func mapZoneRows(rows []repository.ZoneAvailabilityRow) []dto.ZoneResponse {

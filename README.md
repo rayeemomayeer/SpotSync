@@ -43,6 +43,8 @@ SpotSync treats that race as the central engineering problem. The reservation pa
 - **Parking zone management** — admins create zones (`general`, `ev_charging`, `covered`) with capacity and hourly pricing.
 - **Dynamic availability** — `available_spots = total_capacity − active reservations`, computed on every read.
 - **Concurrency-safe reservations** — database transaction + `SELECT … FOR UPDATE` on the zone row; over-capacity bookings return `409 Conflict`.
+- **Bookable parking spots** — per-zone spots with map coordinates (`pos_x`/`pos_y`); optional `spot_id` on reserve; partial unique index prevents two active bookings on the same stall.
+- **Demo reservation TTL** — `X-Demo-Reservation: true` auto-expires showcase bookings; lazy cleanup on spot list and my-reservations reads.
 - **Ownership-scoped actions** — drivers cancel only their own reservations; admins list all reservations.
 - **Consistent API contract** — `{success, message, data}` / `{success, message, errors}` envelope on every response.
 - **Operational endpoints** — `/healthz`, `/readyz`, structured request logging, CORS, auth rate limiting.
@@ -203,6 +205,7 @@ The API listens on `http://localhost:8080` with migrations applied on startup.
 | `BCRYPT_COST` | no | `12` | bcrypt cost (10–14) |
 | `ALLOW_SELF_ADMIN_REGISTRATION` | no | `true` | Honor `admin` role on register |
 | `CORS_ALLOWED_ORIGINS` | no | — | Comma-separated origins |
+| `DEMO_RESERVATION_TTL` | no | `10m` | Auto-expiry for demo reservations (`X-Demo-Reservation: true`) |
 | `MIGRATE_ON_STARTUP` | no | `true` | Run embedded migrations on boot |
 | `LOG_LEVEL` | no | `info` | Log verbosity |
 | `DB_MAX_OPEN_CONNS` | no | `25` | Connection pool size |
@@ -272,6 +275,32 @@ Expose these headers via CORS (`ExposeHeaders`) so browser clients can build adm
 | CORS | Set `CORS_ALLOWED_ORIGINS` to your frontend origin (e.g. `http://localhost:3000`, Vercel URL) |
 | Demo bookings | Optional header `X-Demo-Reservation: true` on `POST /reservations` |
 
+### Bookable spots
+
+Zones with `parking_spots` rows use **spot count as the capacity source of truth** (`total_capacity` syncs when spots are created or trimmed).
+
+**List spots (map UI)**
+
+```http
+GET /api/v1/zones/1/spots
+```
+
+Returns `label`, `pos_x`, `pos_y`, `status`, and `occupied` per stall.
+
+**Reserve a specific stall** — optional `spot_id` (omit for auto-assign; graded contract unchanged)
+
+```http
+POST /api/v1/reservations
+Authorization: Bearer <token>
+X-Demo-Reservation: true
+Content-Type: application/json
+
+{ "zone_id": 1, "license_plate": "DEMO-A1B2", "spot_id": 12 }
+```
+
+Response `data` may include an additive `spot` object. Returns `409` when the zone is full or the spot is taken.
+
+Demo bookings with `X-Demo-Reservation: true` expire after `DEMO_RESERVATION_TTL` (default `10m`); expired rows are cancelled lazily on `GET /zones/:id/spots` and `GET /reservations/my-reservations`.
 
 **Register**
 
@@ -303,6 +332,8 @@ Content-Type: application/json
 { "zone_id": 1, "license_plate": "ABC-1234" }
 ```
 
+With bookable spots, add `"spot_id": 12` to target a stall, or omit for auto-assign.
+
 ### Status codes
 
 | Code | Meaning |
@@ -327,7 +358,7 @@ make test-int        # integration (requires Docker)
 make test-contract   # graded API replay (requires Docker)
 ```
 
-The contract suite replays all nine endpoints against a real Postgres instance. The stampede test fires 50 concurrent reservations at a 1-capacity zone and asserts exactly one success.
+The contract suite replays all nine endpoints against a real Postgres instance. The stampede test fires 50 concurrent reservations at a 1-capacity zone and asserts exactly one success. Spot tests cover per-stall races (30 workers, one `spot_id`), auto-assign with spot preload, and demo TTL lazy cleanup.
 
 ---
 

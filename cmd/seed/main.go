@@ -150,7 +150,7 @@ func ensureZones(ctx context.Context, zoneRepo *repository.ZoneRepository, spotR
 		for i, row := range existing {
 			zones[i] = row.ParkingZone
 		}
-		if err := backfillSpots(ctx, spotRepo, zones, log); err != nil {
+		if err := backfillSpots(ctx, zoneRepo, spotRepo, zones, log); err != nil {
 			return nil, err
 		}
 		return zones, nil
@@ -174,13 +174,17 @@ func ensureZones(ctx context.Context, zoneRepo *repository.ZoneRepository, spotR
 		if err := spotRepo.CreateBatch(ctx, layout); err != nil {
 			return nil, err
 		}
+		zone.TotalCapacity = len(layout)
+		if err := zoneRepo.Update(ctx, zone); err != nil {
+			return nil, err
+		}
 		log.Info("zone created", "name", zone.Name, "id", zone.ID, "capacity", zone.TotalCapacity, "spots", len(layout))
 		zones = append(zones, *zone)
 	}
 	return zones, nil
 }
 
-func backfillSpots(ctx context.Context, spotRepo *repository.SpotRepository, zones []models.ParkingZone, log *slog.Logger) error {
+func backfillSpots(ctx context.Context, zoneRepo *repository.ZoneRepository, spotRepo *repository.SpotRepository, zones []models.ParkingZone, log *slog.Logger) error {
 	for _, zone := range zones {
 		count, err := spotRepo.CountByZone(ctx, zone.ID)
 		if err != nil {
@@ -194,6 +198,11 @@ func backfillSpots(ctx context.Context, spotRepo *repository.SpotRepository, zon
 			layout = spots.ShowcaseLayout(zone.ID)
 		}
 		if err := spotRepo.CreateBatch(ctx, layout); err != nil {
+			return err
+		}
+		zoneCopy := zone
+		zoneCopy.TotalCapacity = len(layout)
+		if err := zoneRepo.Update(ctx, &zoneCopy); err != nil {
 			return err
 		}
 		log.Info("spots backfilled", "zone", zone.Name, "count", len(layout))

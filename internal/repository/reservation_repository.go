@@ -79,7 +79,12 @@ func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p C
 	if err != nil {
 		return nil, err
 	}
-	return &created, nil
+
+	var loaded models.Reservation
+	if err := r.db.WithContext(ctx).Preload("Spot").First(&loaded, created.ID).Error; err != nil {
+		return &created, nil
+	}
+	return &loaded, nil
 }
 
 func resolveSpotForReservation(tx *gorm.DB, zoneID uint, requested *uint) (*uint, error) {
