@@ -58,7 +58,9 @@ func (s *stubReservationService) Create(context.Context, uint, dto.CreateReserva
 	return dto.ReservationResponse{}, nil
 }
 
-func (s *stubReservationService) Cancel(context.Context, uint, uint) error { return nil }
+func (s *stubReservationService) Cancel(context.Context, uint, uint) (dto.ReservationResponse, error) {
+	return dto.ReservationResponse{}, nil
+}
 
 func (s *stubReservationService) ListMine(context.Context, uint) ([]dto.ReservationResponse, error) {
 	return nil, nil
@@ -127,7 +129,7 @@ func TestReservationHandler_ListAllPaginationHeaders(t *testing.T) {
 				Paginated: true,
 			}, nil
 		},
-	})
+	}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/reservations?page=2&limit=10", nil)
 	rec := httptest.NewRecorder()

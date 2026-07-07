@@ -15,6 +15,8 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/app"
 	"github.com/rayeemomayeer/SpotSync/internal/config"
 	"github.com/rayeemomayeer/SpotSync/internal/platform"
+	"github.com/rayeemomayeer/SpotSync/internal/realtime"
+	"github.com/rayeemomayeer/SpotSync/internal/repository"
 )
 
 func main() {
@@ -44,10 +46,29 @@ func run() error {
 		}
 	}
 
-	e := app.NewEcho(cfg, db, log, app.Options{
+	e, hub := app.NewEcho(cfg, db, log, app.Options{
 		AuthRateLimitPerMinute: 20,
 		EnableRequestLogger:    true,
 	})
+
+	redisClient, err := platform.NewRedisClient(cfg.RedisURL)
+	if err != nil {
+		log.Warn("redis unavailable", "error", err)
+	}
+	if redisClient != nil {
+		defer redisClient.Close()
+	}
+
+	reservationRepo := repository.NewReservationRepository(db)
+	expiryCtx, expiryCancel := context.WithCancel(context.Background())
+	defer expiryCancel()
+	go app.RunDemoExpiryWorker(expiryCtx, hub, reservationRepo, log)
+
+	if redisClient != nil {
+		bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
+		defer bridgeCancel()
+		go realtime.BridgeRedis(bridgeCtx, redisClient, hub, log)
+	}
 
 	addr := ":" + cfg.Port
 	log.Info("starting api server", "addr", addr)

@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spotsync
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spotsync-api
+  namespace: spotsync
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: spotsync-api
+  template:
+    metadata:
+      labels:
+        app: spotsync-api
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/rayeemomayeer/spotsync-api:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: spotsync-secrets
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: spotsync-api
+  namespace: spotsync
+spec:
+  selector:
+    app: spotsync-api
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: spotsync-worker
+  namespace: spotsync
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: spotsync-worker
+  template:
+    metadata:
+      labels:
+        app: spotsync-worker
+    spec:
+      containers:
+        - name: worker
+          image: ghcr.io/rayeemomayeer/spotsync-worker:latest
+          envFrom:
+            - secretRef:
+                name: spotsync-secrets
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: spotsync-api
+  namespace: spotsync
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: spotsync-api
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

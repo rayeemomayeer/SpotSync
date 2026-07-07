@@ -62,6 +62,11 @@ func run() error {
 		return err
 	}
 
+	demoAdmin, demoAdminErr := ensureUser(ctx, userRepo, cfg.BcryptCost, "Demo Admin", "demo_admin@spotsync.com", "DemoAdminPass123!", models.RoleAdmin, log)
+	if demoAdminErr != nil {
+		log.Warn("demo admin seed skipped", "error", demoAdminErr)
+	}
+
 	driverAlice, err := ensureUser(ctx, userRepo, cfg.BcryptCost, "Alice Driver", "alice@spotsync.com", "DriverPass123!", models.RoleDriver, log)
 	if err != nil {
 		return err
@@ -83,11 +88,20 @@ func run() error {
 
 	log.Info("seed complete",
 		"admin_email", admin.Email,
+		"demo_admin_email", demoAdminEmail(demoAdmin),
 		"driver_emails", []string{driverAlice.Email, driverBob.Email},
 		"zones", len(zoneList),
 		"demo_driver_password", "DriverPass123!",
+		"demo_admin_password", "DemoAdminPass123!",
 	)
 	return nil
+}
+
+func demoAdminEmail(user *models.User) string {
+	if user == nil {
+		return ""
+	}
+	return user.Email
 }
 
 func ensureUser(
@@ -194,7 +208,7 @@ func backfillSpots(ctx context.Context, zoneRepo *repository.ZoneRepository, spo
 			continue
 		}
 		layout := spots.GridLayout(zone.ID, zone.TotalCapacity)
-		if zone.Name == "Terminal 1 · EV Lot A" {
+		if zone.Name == "Terminal 1 · EV Lot A" || (strings.Contains(zone.Name, "Terminal") && zone.Type == models.ZoneTypeEVCharging) {
 			layout = spots.ShowcaseLayout(zone.ID)
 		}
 		if err := spotRepo.CreateBatch(ctx, layout); err != nil {

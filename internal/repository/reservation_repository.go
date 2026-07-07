@@ -8,24 +8,29 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
+	"github.com/rayeemomayeer/SpotSync/internal/outbox"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 type CreateReservationParams struct {
-	UserID        uint
-	ZoneID        uint
-	LicensePlate  string
-	SpotID        *uint
-	DemoExpiresAt *time.Time
+	UserID         uint
+	ZoneID         uint
+	LicensePlate   string
+	SpotID         *uint
+	DemoExpiresAt  *time.Time
+	StartTime      *time.Time
+	EndTime        *time.Time
+	IdempotencyKey *string
 }
 
 type ReservationRepository struct {
-	db *gorm.DB
+	db     *gorm.DB
+	outbox *outbox.Repository
 }
 
 func NewReservationRepository(db *gorm.DB) *ReservationRepository {
-	return &ReservationRepository{db: db}
+	return &ReservationRepository{db: db, outbox: outbox.NewRepository(db)}
 }
 
 func (r *ReservationRepository) CreateActive(ctx context.Context, userID, zoneID uint, licensePlate string) (*models.Reservation, error) {
@@ -37,6 +42,16 @@ func (r *ReservationRepository) CreateActive(ctx context.Context, userID, zoneID
 }
 
 func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p CreateReservationParams) (*models.Reservation, error) {
+	if p.IdempotencyKey != nil && *p.IdempotencyKey != "" {
+		existing, err := r.findByIdempotencyKey(ctx, *p.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return existing, nil
+		}
+	}
+
 	var created models.Reservation
 
 	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -64,17 +79,27 @@ func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p C
 		}
 
 		created = models.Reservation{
-			UserID:        p.UserID,
-			ZoneID:        p.ZoneID,
-			SpotID:        spotID,
-			LicensePlate:  p.LicensePlate,
-			Status:        models.ReservationStatusActive,
-			DemoExpiresAt: p.DemoExpiresAt,
+			UserID:         p.UserID,
+			ZoneID:         p.ZoneID,
+			SpotID:         spotID,
+			LicensePlate:   p.LicensePlate,
+			Status:         models.ReservationStatusActive,
+			DemoExpiresAt:  p.DemoExpiresAt,
+			StartTime:      p.StartTime,
+			EndTime:        p.EndTime,
+			IdempotencyKey: p.IdempotencyKey,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return mapReservationWriteErr(err)
 		}
-		return nil
+		payload := domain.ReservationEventPayload{
+			ReservationID: created.ID,
+			ZoneID:        created.ZoneID,
+			SpotID:        created.SpotID,
+			UserID:        created.UserID,
+			LicensePlate:  created.LicensePlate,
+		}
+		return outbox.InsertReservationEvent(tx, r.outbox, domain.EventReservationCreated, payload)
 	})
 	if err != nil {
 		return nil, err
@@ -161,21 +186,77 @@ func (r *ReservationRepository) FindByID(ctx context.Context, id uint) (*models.
 	return &res, nil
 }
 
-func (r *ReservationRepository) Cancel(ctx context.Context, reservationID, userID uint) error {
+func (r *ReservationRepository) Cancel(ctx context.Context, reservationID, userID uint) (*models.Reservation, error) {
 	var res models.Reservation
-	if err := r.db.WithContext(ctx).First(&res, reservationID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return domain.ErrNotFound
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Preload("Spot").First(&res, reservationID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return domain.ErrNotFound
+			}
+			return err
 		}
-		return err
+		if res.UserID != userID {
+			return domain.ErrNotOwner
+		}
+		if res.Status == models.ReservationStatusCancelled {
+			return nil
+		}
+		if err := tx.Model(&res).Update("status", models.ReservationStatusCancelled).Error; err != nil {
+			return err
+		}
+		res.Status = models.ReservationStatusCancelled
+		payload := domain.ReservationEventPayload{
+			ReservationID: res.ID,
+			ZoneID:        res.ZoneID,
+			SpotID:        res.SpotID,
+			UserID:        res.UserID,
+			LicensePlate:  res.LicensePlate,
+		}
+		return outbox.InsertReservationEvent(tx, r.outbox, domain.EventReservationCancelled, payload)
+	})
+	if err != nil {
+		return nil, err
 	}
-	if res.UserID != userID {
-		return domain.ErrNotOwner
+	return &res, nil
+}
+
+func (r *ReservationRepository) findByIdempotencyKey(ctx context.Context, key string) (*models.Reservation, error) {
+	var res models.Reservation
+	err := r.db.WithContext(ctx).Preload("Spot").Where("idempotency_key = ?", key).First(&res).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
 	}
-	if res.Status == models.ReservationStatusCancelled {
-		return nil
+	if err != nil {
+		return nil, err
 	}
-	return r.db.WithContext(ctx).Model(&res).Update("status", models.ReservationStatusCancelled).Error
+	return &res, nil
+}
+
+func (r *ReservationRepository) ExpireDemoReservations(ctx context.Context, now time.Time) ([]models.Reservation, error) {
+	var list []models.Reservation
+	if err := r.db.WithContext(ctx).
+		Preload("Spot").
+		Where("status = ? AND demo_expires_at IS NOT NULL AND demo_expires_at <= ?", models.ReservationStatusActive, now).
+		Find(&list).Error; err != nil {
+		return nil, err
+	}
+	if len(list) == 0 {
+		return nil, nil
+	}
+	ids := make([]uint, len(list))
+	for i, res := range list {
+		ids[i] = res.ID
+	}
+	if err := r.db.WithContext(ctx).
+		Model(&models.Reservation{}).
+		Where("id IN ?", ids).
+		Update("status", models.ReservationStatusCancelled).Error; err != nil {
+		return nil, err
+	}
+	for i := range list {
+		list[i].Status = models.ReservationStatusCancelled
+	}
+	return list, nil
 }
 
 func (r *ReservationRepository) ListByUser(ctx context.Context, userID uint) ([]models.Reservation, error) {

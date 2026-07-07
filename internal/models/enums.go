@@ -17,6 +17,6 @@ const (
 // Phase 0 uses active/cancelled; completed is used from Phase 1 expiry.
 const (
 	ReservationStatusActive    = "active"
-	ReservationStatusCompleted = "completed"
+	ReservationStatusCompleted   = "completed"
 	ReservationStatusCancelled = "cancelled"
 )

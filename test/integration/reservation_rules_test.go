@@ -103,7 +103,7 @@ func TestReservationRepository_ownershipRule(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := resRepo.Cancel(ctx, res.ID, tt.userID)
+			_, err := resRepo.Cancel(ctx, res.ID, tt.userID)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("Cancel() error = %v, want %v", err, tt.wantErr)
 			}

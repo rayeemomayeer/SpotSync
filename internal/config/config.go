@@ -39,6 +39,8 @@ type Config struct {
 	MigrateOnStartup           bool
 	MigrationsPath             string
 	DemoReservationTTL         time.Duration
+	RedisURL                   string
+	CapacityStrategy           string
 }
 
 // Load reads configuration from the environment and fails fast on missing required values.
@@ -136,6 +138,9 @@ func (c *Config) parseOptionalFields() error {
 	} else {
 		c.DemoReservationTTL = defaultDemoReservationTTL
 	}
+
+	c.RedisURL = strings.TrimSpace(os.Getenv("REDIS_URL"))
+	c.CapacityStrategy = envOrDefault("CAPACITY_STRATEGY", "row_lock")
 
 	return nil
 }

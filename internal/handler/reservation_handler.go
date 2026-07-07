@@ -9,24 +9,27 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/dto"
 	"github.com/rayeemomayeer/SpotSync/internal/middleware"
+	"github.com/rayeemomayeer/SpotSync/internal/realtime"
 	"github.com/rayeemomayeer/SpotSync/internal/service"
 )
 
 const demoReservationHeader = "X-Demo-Reservation"
+const idempotencyHeader = "Idempotency-Key"
 
 type ReservationService interface {
 	Create(ctx context.Context, userID uint, req dto.CreateReservationRequest, opts service.CreateReservationOptions) (dto.ReservationResponse, error)
-	Cancel(ctx context.Context, userID, reservationID uint) error
+	Cancel(ctx context.Context, userID, reservationID uint) (dto.ReservationResponse, error)
 	ListMine(ctx context.Context, userID uint) ([]dto.ReservationResponse, error)
 	ListAll(ctx context.Context, q dto.PaginationQuery) (service.ListAllResult, error)
 }
 
 type ReservationHandler struct {
 	reservations ReservationService
+	hub          *realtime.Hub
 }
 
-func NewReservationHandler(reservations ReservationService) *ReservationHandler {
-	return &ReservationHandler{reservations: reservations}
+func NewReservationHandler(reservations ReservationService, hub *realtime.Hub) *ReservationHandler {
+	return &ReservationHandler{reservations: reservations, hub: hub}
 }
 
 func (h *ReservationHandler) Create(c echo.Context) error {
@@ -43,13 +46,45 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 	opts := service.CreateReservationOptions{
 		DemoReservation: isDemoReservation(c),
 	}
+	if key := strings.TrimSpace(c.Request().Header.Get(idempotencyHeader)); key != "" {
+		opts.IdempotencyKey = &key
+	}
 
 	res, err := h.reservations.Create(c.Request().Context(), userID, req, opts)
 	if err != nil {
 		return err
 	}
 
+	h.publishReserved(res)
+
 	return JSONSuccess(c, http.StatusCreated, "Reservation created successfully", res)
+}
+
+func (h *ReservationHandler) publishReserved(res dto.ReservationResponse) {
+	if h.hub == nil || res.SpotID == nil {
+		return
+	}
+	h.hub.Publish(realtime.ZoneEvent{
+		Type:          realtime.EventSpotReserved,
+		ZoneID:        res.ZoneID,
+		SpotID:        *res.SpotID,
+		UserID:        res.UserID,
+		ReservationID: res.ID,
+		LicensePlate:  res.LicensePlate,
+	})
+}
+
+func (h *ReservationHandler) publishReleased(res dto.ReservationResponse) {
+	if h.hub == nil || res.SpotID == nil {
+		return
+	}
+	h.hub.Publish(realtime.ZoneEvent{
+		Type:          realtime.EventSpotReleased,
+		ZoneID:        res.ZoneID,
+		SpotID:        *res.SpotID,
+		UserID:        res.UserID,
+		ReservationID: res.ID,
+	})
 }
 
 func isDemoReservation(c echo.Context) bool {
@@ -84,9 +119,12 @@ func (h *ReservationHandler) Cancel(c echo.Context) error {
 		return err
 	}
 
-	if err := h.reservations.Cancel(c.Request().Context(), userID, id); err != nil {
+	cancelled, err := h.reservations.Cancel(c.Request().Context(), userID, id)
+	if err != nil {
 		return err
 	}
+
+	h.publishReleased(cancelled)
 
 	return NoContentSuccess(c, "Reservation cancelled successfully")
 }

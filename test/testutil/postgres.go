@@ -95,7 +95,7 @@ func NewTestServer(t *testing.T, db *gorm.DB, databaseURL string) *httptest.Serv
 
 	cfg := TestConfig(databaseURL)
 	log := platform.NewLogger(cfg.LogLevel)
-	e := app.NewEcho(cfg, db, log, app.Options{
+	e, _ := app.NewEcho(cfg, db, log, app.Options{
 		AuthRateLimitPerMinute: 1000,
 		EnableRequestLogger:    false,
 	})

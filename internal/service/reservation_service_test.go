@@ -15,7 +15,7 @@ import (
 type mockReservationStore struct {
 	createFn     func(ctx context.Context, userID, zoneID uint, licensePlate string) (*models.Reservation, error)
 	createOptsFn func(ctx context.Context, p repository.CreateReservationParams) (*models.Reservation, error)
-	cancelFn     func(ctx context.Context, reservationID, userID uint) error
+	cancelFn     func(ctx context.Context, reservationID, userID uint) (*models.Reservation, error)
 	listUser     func(ctx context.Context, userID uint) ([]models.Reservation, error)
 	listAll      func(ctx context.Context, page, limit int) ([]models.Reservation, error)
 	countAll     func(ctx context.Context) (int64, error)
@@ -39,7 +39,7 @@ func (m *mockReservationStore) CreateActiveWithOptions(ctx context.Context, p re
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockReservationStore) Cancel(ctx context.Context, reservationID, userID uint) error {
+func (m *mockReservationStore) Cancel(ctx context.Context, reservationID, userID uint) (*models.Reservation, error) {
 	return m.cancelFn(ctx, reservationID, userID)
 }
 
@@ -114,12 +114,12 @@ func (m *mockZoneStore) Delete(ctx context.Context, id uint) error {
 
 func TestReservationService_CancelNotOwner(t *testing.T) {
 	svc := service.NewReservationService(&mockReservationStore{
-		cancelFn: func(_ context.Context, _, _ uint) error {
-			return domain.ErrNotOwner
+		cancelFn: func(_ context.Context, _, _ uint) (*models.Reservation, error) {
+			return nil, domain.ErrNotOwner
 		},
 	}, &mockZoneStore{}, 0)
 
-	err := svc.Cancel(context.Background(), 1, 99)
+	_, err := svc.Cancel(context.Background(), 1, 99)
 	if !errors.Is(err, domain.ErrNotOwner) {
 		t.Fatalf("error = %v", err)
 	}

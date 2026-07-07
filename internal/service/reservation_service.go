@@ -12,7 +12,7 @@ import (
 type ReservationStore interface {
 	CreateActive(ctx context.Context, userID, zoneID uint, licensePlate string) (*models.Reservation, error)
 	CreateActiveWithOptions(ctx context.Context, p repository.CreateReservationParams) (*models.Reservation, error)
-	Cancel(ctx context.Context, reservationID, userID uint) error
+	Cancel(ctx context.Context, reservationID, userID uint) (*models.Reservation, error)
 	ListByUser(ctx context.Context, userID uint) ([]models.Reservation, error)
 	ListAll(ctx context.Context, page, limit int) ([]models.Reservation, error)
 	CountAll(ctx context.Context) (int64, error)
@@ -29,6 +29,7 @@ type ListAllResult struct {
 
 type CreateReservationOptions struct {
 	DemoReservation bool
+	IdempotencyKey  *string
 }
 
 type ReservationService struct {
@@ -46,10 +47,13 @@ func NewReservationService(reservations ReservationStore, zones ZoneStore, demoT
 
 func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.CreateReservationRequest, opts CreateReservationOptions) (dto.ReservationResponse, error) {
 	params := repository.CreateReservationParams{
-		UserID:       userID,
-		ZoneID:       req.ZoneID,
-		LicensePlate: req.LicensePlate,
-		SpotID:       req.SpotID,
+		UserID:         userID,
+		ZoneID:         req.ZoneID,
+		LicensePlate:   req.LicensePlate,
+		SpotID:         req.SpotID,
+		StartTime:      req.StartTime,
+		EndTime:        req.EndTime,
+		IdempotencyKey: opts.IdempotencyKey,
 	}
 	if opts.DemoReservation {
 		expires := time.Now().Add(s.demoTTL)
@@ -63,8 +67,12 @@ func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.Cr
 	return dto.ReservationFromModel(*res), nil
 }
 
-func (s *ReservationService) Cancel(ctx context.Context, userID, reservationID uint) error {
-	return s.reservations.Cancel(ctx, reservationID, userID)
+func (s *ReservationService) Cancel(ctx context.Context, userID, reservationID uint) (dto.ReservationResponse, error) {
+	res, err := s.reservations.Cancel(ctx, reservationID, userID)
+	if err != nil {
+		return dto.ReservationResponse{}, err
+	}
+	return dto.ReservationFromModel(*res), nil
 }
 
 func (s *ReservationService) ListMine(ctx context.Context, userID uint) ([]dto.ReservationResponse, error) {

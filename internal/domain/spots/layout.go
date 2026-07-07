@@ -39,19 +39,22 @@ func GridLayout(zoneID uint, capacity int) []models.ParkingSpot {
 	return spots
 }
 
-// ShowcaseLayout returns curated coordinates for the demo EV lot (24 spots, 4x6).
+// ShowcaseLayout returns coordinates aligned with spotsync-web reference-layout.ts (1264×843 map).
 func ShowcaseLayout(zoneID uint) []models.ParkingSpot {
 	const capacity = 24
-	cols := 6
 	spots := make([]models.ParkingSpot, 0, capacity)
+	anchors := [][2]float64{
+		{290, 350}, {320, 350}, {350, 350}, {275, 425}, {305, 425}, {335, 425},
+		{920, 350}, {965, 350}, {995, 350}, {860, 380}, {890, 380}, {905, 405},
+		{304, 552}, {328, 552}, {364, 552}, {280, 600}, {268, 636}, {340, 636},
+		{844, 552}, {916, 552}, {940, 552}, {868, 576}, {976, 576}, {1000, 564},
+	}
 	for i := 0; i < capacity; i++ {
-		col := i % cols
-		row := i / cols
 		spots = append(spots, models.ParkingSpot{
 			ZoneID: zoneID,
-			Label:  fmt.Sprintf("EV-%02d", i+1),
-			PosX:   180 + float64(col)*52,
-			PosY:   140 + float64(row)*72,
+			Label:  fmt.Sprintf("A-%02d", i+1),
+			PosX:   anchors[i][0],
+			PosY:   anchors[i][1],
 			Status: models.SpotStatusAvailable,
 		})
 	}

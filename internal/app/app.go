@@ -6,10 +6,12 @@ import (
 
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rayeemomayeer/SpotSync/internal/config"
 	"github.com/rayeemomayeer/SpotSync/internal/handler"
 	appmw "github.com/rayeemomayeer/SpotSync/internal/middleware"
 	"github.com/rayeemomayeer/SpotSync/internal/platform"
+	"github.com/rayeemomayeer/SpotSync/internal/realtime"
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
 	"github.com/rayeemomayeer/SpotSync/internal/service"
 	"gorm.io/gorm"
@@ -22,10 +24,12 @@ type Options struct {
 	EnableRequestLogger    bool
 }
 
-func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *echo.Echo {
+func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*echo.Echo, *realtime.Hub) {
 	if opts.AuthRateLimitPerMinute < 1 {
 		opts.AuthRateLimitPerMinute = defaultAuthRateLimitPerMinute
 	}
+
+	hub := realtime.NewHub()
 
 	userRepo := repository.NewUserRepository(db)
 	zoneRepo := repository.NewZoneRepository(db)
@@ -40,8 +44,9 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	zoneHandler := handler.NewZoneHandler(zoneSvc)
-	reservationHandler := handler.NewReservationHandler(reservationSvc)
+	reservationHandler := handler.NewReservationHandler(reservationSvc, hub)
 	spotHandler := handler.NewSpotHandler(spotSvc)
+	sseHandler := handler.NewSSEHandler(hub)
 
 	readiness := &handler.DBReadinessChecker{
 		PingFn: func(ctx context.Context) error {
@@ -61,6 +66,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 
 	e.Use(echomw.Recover())
 	e.Use(appmw.RequestID())
+	e.Use(platform.MetricsMiddleware())
 	if opts.EnableRequestLogger && log != nil {
 		e.Use(appmw.RequestLogger(log))
 	}
@@ -69,6 +75,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 	health := handler.NewHealthHandler(readiness)
 	e.GET("/healthz", health.Healthz)
 	e.GET("/readyz", health.Readyz)
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
 
 	jwtAuth := appmw.JWTAuth(tokenManager)
 	requireAdmin := appmw.RequireAdmin()
@@ -83,7 +90,9 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 
 	zones := v1.Group("/zones")
 	zones.GET("", zoneHandler.List)
+	zones.GET("/stream", sseHandler.StreamAllZones)
 	zones.GET("/:id", zoneHandler.GetByID)
+	zones.GET("/:id/events", sseHandler.StreamZoneEvents)
 	zones.GET("/:id/spots", spotHandler.ListByZone)
 	zones.POST("", zoneHandler.Create, jwtAuth, requireAdmin)
 	zones.PUT("/:id", zoneHandler.Update, jwtAuth, requireAdmin)
@@ -96,5 +105,5 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) *e
 	reservations.DELETE("/:id", reservationHandler.Cancel)
 	reservations.GET("", reservationHandler.ListAll, requireAdmin)
 
-	return e
+	return e, hub
 }

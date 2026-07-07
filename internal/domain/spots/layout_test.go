@@ -11,7 +11,7 @@ func TestShowcaseLayout(t *testing.T) {
 	if len(layout) != 24 {
 		t.Fatalf("len = %d, want 24", len(layout))
 	}
-	if layout[0].Label != "EV-01" {
+	if layout[0].Label != "A-01" {
 		t.Fatalf("label = %q", layout[0].Label)
 	}
 }

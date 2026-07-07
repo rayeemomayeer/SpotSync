@@ -16,6 +16,17 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: spotsync-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   api:
     build:
       context: ../..
@@ -26,13 +37,44 @@ services:
     environment:
       PORT: "8080"
       DATABASE_URL: postgres://spotsync:spotsync@postgres:5432/spotsync?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
       JWT_SECRET: local-dev-secret-change-me
       MIGRATE_ON_STARTUP: "true"
       ALLOW_SELF_ADMIN_REGISTRATION: "true"
+      CORS_ALLOWED_ORIGINS: http://localhost:3000
       LOG_LEVEL: info
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.worker
+    container_name: spotsync-worker
+    environment:
+      DATABASE_URL: postgres://spotsync:spotsync@postgres:5432/spotsync?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: local-dev-secret-change-me
+      MIGRATE_ON_STARTUP: "true"
+      LOG_LEVEL: info
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  prometheus:
+    image: prom/prometheus:v2.55.0
+    container_name: spotsync-prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    depends_on:
+      - api
 
 volumes:
   spotsync_pg_data:

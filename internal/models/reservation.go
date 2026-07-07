@@ -10,8 +10,12 @@ type Reservation struct {
 	SpotID        *uint      `gorm:"index"`
 	LicensePlate  string     `gorm:"size:15;not null"`
 	Status        string     `gorm:"not null;default:active;index:idx_reservations_zone_id_status,priority:2"`
-	DemoExpiresAt *time.Time `gorm:"index:idx_reservations_demo_expires_at"`
-	CreatedAt     time.Time  `gorm:"not null"`
+	DemoExpiresAt   *time.Time `gorm:"index:idx_reservations_demo_expires_at"`
+	StartTime       *time.Time
+	EndTime         *time.Time `gorm:"index:idx_reservations_end_time_active"`
+	IdempotencyKey  *string    `gorm:"size:128;uniqueIndex:idx_reservations_idempotency_key"`
+	Version         int        `gorm:"not null;default:0"`
+	CreatedAt       time.Time  `gorm:"not null"`
 	UpdatedAt     time.Time  `gorm:"not null"`
 
 	User User        `gorm:"foreignKey:UserID;references:ID"`

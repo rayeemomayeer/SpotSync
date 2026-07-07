@@ -423,11 +423,13 @@ Set `CORS_ALLOWED_ORIGINS` on Render to your frontend origin(s), comma-separated
 ## Roadmap
 
 - [x] **Phase 0 — Graded baseline** — auth, RBAC, zones, concurrency-safe reservations, contract tests.
-- [ ] **Phase 1 — Event-driven** — transactional outbox, worker, time-bounded expiry.
-- [ ] **Phase 2 — Real-time** — Redis cache, SSE availability stream.
-- [ ] **Phase 3 — Distributed** — pluggable capacity strategies, Nginx multi-replica.
-- [ ] **Phase 4 — Observability** — Prometheus, Grafana, k6 load tests.
-- [ ] **Phase 5 — Kubernetes** — kind cluster, HPA, ingress.
+- [x] **Phase 0.5 — Frontend-enablement** — `/auth/me`, pagination headers, zone filters, admin CRUD.
+- [x] **Phase 0.6 — Bookable spots** — map coordinates, optional `spot_id`, demo TTL.
+- [x] **Phase 1 — Event-driven** — transactional outbox, worker relay, time-based expiry.
+- [x] **Phase 2 — Real-time** — Redis pub/sub, SSE (`/zones/stream`, `/zones/:id/events`).
+- [x] **Phase 3 — Distributed** — pluggable capacity guard (row-lock default), Nginx config.
+- [x] **Phase 4 — Observability** — Prometheus `/metrics`, k6 stampede script, compose stack.
+- [x] **Phase 5 — Kubernetes** — kind manifests, HPA, worker image.
 
 ---
 
