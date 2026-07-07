@@ -112,3 +112,29 @@ func (r *RedisClient) Incr(ctx context.Context, key string) error {
 func ZoneAvailKey(zoneID uint) string {
 	return fmt.Sprintf("spotsync:avail:%d", zoneID)
 }
+
+func ZoneCapacityKey(zoneID uint) string {
+	return fmt.Sprintf("spotsync:capacity:%d", zoneID)
+}
+
+func (r *RedisClient) Exists(ctx context.Context, key string) (bool, error) {
+	if r == nil || r.client == nil {
+		return false, fmt.Errorf("redis not configured")
+	}
+	n, err := r.client.Exists(ctx, key).Result()
+	return n > 0, err
+}
+
+func (r *RedisClient) SetNX(ctx context.Context, key string, value int64) error {
+	if r == nil || r.client == nil {
+		return fmt.Errorf("redis not configured")
+	}
+	ok, err := r.client.SetNX(ctx, key, strconv.FormatInt(value, 10), 0).Result()
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+	return nil
+}

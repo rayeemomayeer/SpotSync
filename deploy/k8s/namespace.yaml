@@ -1,0 +1,10 @@
+# Apply after creating secrets from secrets.example.yaml
+# kubectl apply -f deploy/k8s/namespace.yaml
+# kubectl apply -f deploy/k8s/postgres-redis.yaml
+# kubectl apply -f deploy/k8s/secrets.yaml
+# kubectl apply -f deploy/k8s/spotsync.yaml
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: spotsync

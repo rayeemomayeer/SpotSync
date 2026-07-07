@@ -9,6 +9,7 @@ import (
 	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rayeemomayeer/SpotSync/internal/cache"
+	"github.com/rayeemomayeer/SpotSync/internal/capacity"
 	"github.com/rayeemomayeer/SpotSync/internal/config"
 	"github.com/rayeemomayeer/SpotSync/internal/handler"
 	appmw "github.com/rayeemomayeer/SpotSync/internal/middleware"
@@ -48,7 +49,12 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	}
 
 	zoneSvc := service.NewZoneService(zoneRepo, spotRepo, reservationRepo, availCache)
-	reservationSvc := service.NewReservationService(reservationRepo, zoneRepo, cfg.DemoReservationTTL)
+
+	capacityGuard, err := capacity.NewGuard(cfg.CapacityStrategy, reservationRepo, zoneRepo, opts.RedisClient)
+	if err != nil {
+		panic(err)
+	}
+	reservationSvc := service.NewReservationService(reservationRepo, capacityGuard, zoneRepo, cfg.DemoReservationTTL)
 	spotSvc := service.NewSpotService(spotRepo, reservationRepo)
 
 	authHandler := handler.NewAuthHandler(authSvc)
@@ -57,15 +63,24 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	spotHandler := handler.NewSpotHandler(spotSvc)
 	sseHandler := handler.NewSSEHandler(hub)
 
-	readiness := &handler.DBReadinessChecker{
-		PingFn: func(ctx context.Context) error {
-			sqlDB, err := db.DB()
-			if err != nil {
-				return err
-			}
-			return sqlDB.PingContext(ctx)
+	readinessCheckers := []handler.ReadinessChecker{
+		&handler.DBReadinessChecker{
+			PingFn: func(ctx context.Context) error {
+				sqlDB, err := db.DB()
+				if err != nil {
+					return err
+				}
+				return sqlDB.PingContext(ctx)
+			},
 		},
 	}
+	if opts.RedisClient != nil {
+		readinessCheckers = append(readinessCheckers, &handler.RedisReadinessChecker{
+			PingFn: opts.RedisClient.Ping,
+		})
+	}
+
+	health := handler.NewHealthHandler(&handler.MultiReadinessChecker{Checkers: readinessCheckers})
 
 	e := echo.New()
 	e.HideBanner = true
@@ -81,7 +96,6 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	}
 	e.Use(appmw.CORS(cfg.CORSAllowedOrigins))
 
-	health := handler.NewHealthHandler(readiness)
 	e.GET("/healthz", health.Healthz)
 	e.GET("/readyz", health.Readyz)
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))

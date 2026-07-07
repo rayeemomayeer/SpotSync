@@ -117,7 +117,7 @@ func TestReservationService_CancelNotOwner(t *testing.T) {
 		cancelFn: func(_ context.Context, _, _ uint) (*models.Reservation, error) {
 			return nil, domain.ErrNotOwner
 		},
-	}, &mockZoneStore{}, 0)
+	}, nil, &mockZoneStore{}, 0)
 
 	_, err := svc.Cancel(context.Background(), 1, 99)
 	if !errors.Is(err, domain.ErrNotOwner) {
@@ -130,7 +130,7 @@ func TestReservationService_CreateZoneFull(t *testing.T) {
 		createOptsFn: func(_ context.Context, _ repository.CreateReservationParams) (*models.Reservation, error) {
 			return nil, domain.ErrZoneFull
 		},
-	}, &mockZoneStore{}, 0)
+	}, nil, &mockZoneStore{}, 0)
 
 	_, err := svc.Create(context.Background(), 1, dto.CreateReservationRequest{ZoneID: 1, LicensePlate: "ABC"}, service.CreateReservationOptions{})
 	if !errors.Is(err, domain.ErrZoneFull) {
@@ -146,7 +146,7 @@ func TestReservationService_ListAllNoPagination(t *testing.T) {
 			}
 			return []models.Reservation{}, nil
 		},
-	}, &mockZoneStore{}, 0)
+	}, nil, &mockZoneStore{}, 0)
 
 	_, err := svc.ListAll(context.Background(), dto.PaginationQuery{})
 	if err != nil {
@@ -165,7 +165,7 @@ func TestReservationService_ListAllWithPagination(t *testing.T) {
 		countAll: func(context.Context) (int64, error) {
 			return 25, nil
 		},
-	}, &mockZoneStore{}, 0)
+	}, nil, &mockZoneStore{}, 0)
 
 	result, err := svc.ListAll(context.Background(), dto.PaginationQuery{Page: 2, Limit: 10})
 	if err != nil {

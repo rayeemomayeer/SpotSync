@@ -173,7 +173,23 @@ func (c *Config) validate() error {
 		return errors.New("DB_MAX_IDLE_CONNS: must not exceed DB_MAX_OPEN_CONNS")
 	}
 
+	if err := validateCapacityStrategy(c.CapacityStrategy, c.RedisURL); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+func validateCapacityStrategy(strategy, redisURL string) error {
+	switch strategy {
+	case "row_lock", "optimistic", "redis_counter", "":
+		if strategy == "redis_counter" && redisURL == "" {
+			return errors.New("CAPACITY_STRATEGY=redis_counter requires REDIS_URL")
+		}
+		return nil
+	default:
+		return fmt.Errorf("CAPACITY_STRATEGY: unknown value %q", strategy)
+	}
 }
 
 func envOrDefault(key, fallback string) string {

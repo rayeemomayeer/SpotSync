@@ -19,6 +19,11 @@ type ReservationStore interface {
 	HasActiveOnSpot(ctx context.Context, spotID uint) (bool, error)
 }
 
+type ReservationReserver interface {
+	Reserve(ctx context.Context, p repository.CreateReservationParams) (*models.Reservation, error)
+	ReleaseCapacity(ctx context.Context, zoneID uint) error
+}
+
 type ListAllResult struct {
 	Items     []dto.ReservationResponse
 	Total     int64
@@ -34,15 +39,16 @@ type CreateReservationOptions struct {
 
 type ReservationService struct {
 	reservations ReservationStore
+	reserver     ReservationReserver
 	zones        ZoneStore
 	demoTTL      time.Duration
 }
 
-func NewReservationService(reservations ReservationStore, zones ZoneStore, demoTTL time.Duration) *ReservationService {
+func NewReservationService(reservations ReservationStore, reserver ReservationReserver, zones ZoneStore, demoTTL time.Duration) *ReservationService {
 	if demoTTL < 1 {
 		demoTTL = defaultDemoReservationTTL
 	}
-	return &ReservationService{reservations: reservations, zones: zones, demoTTL: demoTTL}
+	return &ReservationService{reservations: reservations, reserver: reserver, zones: zones, demoTTL: demoTTL}
 }
 
 func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.CreateReservationRequest, opts CreateReservationOptions) (dto.ReservationResponse, error) {
@@ -60,17 +66,27 @@ func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.Cr
 		params.DemoExpiresAt = &expires
 	}
 
-	res, err := s.reservations.CreateActiveWithOptions(ctx, params)
+	res, err := s.reserve(ctx, params)
 	if err != nil {
 		return dto.ReservationResponse{}, err
 	}
 	return dto.ReservationFromModel(*res), nil
 }
 
+func (s *ReservationService) reserve(ctx context.Context, params repository.CreateReservationParams) (*models.Reservation, error) {
+	if s.reserver != nil {
+		return s.reserver.Reserve(ctx, params)
+	}
+	return s.reservations.CreateActiveWithOptions(ctx, params)
+}
+
 func (s *ReservationService) Cancel(ctx context.Context, userID, reservationID uint) (dto.ReservationResponse, error) {
 	res, err := s.reservations.Cancel(ctx, reservationID, userID)
 	if err != nil {
 		return dto.ReservationResponse{}, err
+	}
+	if s.reserver != nil {
+		_ = s.reserver.ReleaseCapacity(ctx, res.ZoneID)
 	}
 	return dto.ReservationFromModel(*res), nil
 }

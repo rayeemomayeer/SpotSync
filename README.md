@@ -449,9 +449,9 @@ See [deploy/runbook.md](./deploy/runbook.md) for deploy, rollback, and observabi
 | **0.6 — Bookable spots** | Done | `spot_id`, demo TTL, map coordinates in DB |
 | **1 — Event-driven** | Done | Outbox + worker (`cmd/worker`); deploy via `render.yaml` |
 | **2 — Real-time** | Done | SSE + Redis bridge; availability cache wired |
-| **3 — Distributed** | Partial | `row_lock` production default; `optimistic` / `redis_counter` delegate to row lock |
+| **3 — Distributed** | Done | `row_lock`, `optimistic`, `redis_counter` strategies; nginx in compose; Redis readiness |
 | **4 — Observability** | Done | Prometheus `/metrics`, k6 in CI, compose + Grafana guide |
-| **5 — Kubernetes** | Scaffold | kind manifests; production uses Render |
+| **5 — Kubernetes** | Done (local) | kind scripts, in-cluster Postgres/Redis dev manifests, kind smoke in CI |
 | **F — Frontend** | Done | [Live Console](https://spotsync-nu.vercel.app) (separate repo) |
 | **6 — AI** | Deferred | Optional satellite |
 

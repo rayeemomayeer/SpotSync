@@ -13,6 +13,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+var errOptimisticConflict = errors.New("optimistic capacity conflict")
+
 type CreateReservationParams struct {
 	UserID         uint
 	ZoneID         uint
@@ -110,6 +112,109 @@ func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p C
 		return &created, nil
 	}
 	return &loaded, nil
+}
+
+const optimisticMaxRetries = 5
+
+func (r *ReservationRepository) CreateActiveOptimistic(ctx context.Context, p CreateReservationParams) (*models.Reservation, error) {
+	if p.IdempotencyKey != nil && *p.IdempotencyKey != "" {
+		existing, err := r.findByIdempotencyKey(ctx, *p.IdempotencyKey)
+		if err != nil {
+			return nil, err
+		}
+		if existing != nil {
+			return existing, nil
+		}
+	}
+
+	var last *models.Reservation
+	for attempt := 0; attempt < optimisticMaxRetries; attempt++ {
+		res, err := r.tryOptimisticCreate(ctx, p)
+		if errors.Is(err, errOptimisticConflict) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		last = res
+		break
+	}
+	if last == nil {
+		return nil, domain.ErrConflict
+	}
+
+	var loaded models.Reservation
+	if err := r.db.WithContext(ctx).Preload("Spot").First(&loaded, last.ID).Error; err != nil {
+		return last, nil
+	}
+	return &loaded, nil
+}
+
+func (r *ReservationRepository) tryOptimisticCreate(ctx context.Context, p CreateReservationParams) (*models.Reservation, error) {
+	var created models.Reservation
+
+	err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var zone models.ParkingZone
+		if err := tx.First(&zone, p.ZoneID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return domain.ErrNotFound
+			}
+			return err
+		}
+
+		var active int64
+		if err := tx.Model(&models.Reservation{}).
+			Where("zone_id = ? AND status = ?", p.ZoneID, models.ReservationStatusActive).
+			Count(&active).Error; err != nil {
+			return err
+		}
+		if active >= int64(zone.TotalCapacity) {
+			return domain.ErrZoneFull
+		}
+
+		spotID, err := resolveSpotForReservation(tx, p.ZoneID, p.SpotID)
+		if err != nil {
+			return err
+		}
+
+		created = models.Reservation{
+			UserID:         p.UserID,
+			ZoneID:         p.ZoneID,
+			SpotID:         spotID,
+			LicensePlate:   p.LicensePlate,
+			Status:         models.ReservationStatusActive,
+			DemoExpiresAt:  p.DemoExpiresAt,
+			StartTime:      p.StartTime,
+			EndTime:        p.EndTime,
+			IdempotencyKey: p.IdempotencyKey,
+		}
+		if err := tx.Create(&created).Error; err != nil {
+			return mapReservationWriteErr(err)
+		}
+
+		var activeAfter int64
+		if err := tx.Model(&models.Reservation{}).
+			Where("zone_id = ? AND status = ?", p.ZoneID, models.ReservationStatusActive).
+			Count(&activeAfter).Error; err != nil {
+			return err
+		}
+		if activeAfter > int64(zone.TotalCapacity) {
+			return errOptimisticConflict
+		}
+
+		payload := domain.ReservationEventPayload{
+			ReservationID: created.ID,
+			ZoneID:        created.ZoneID,
+			SpotID:        created.SpotID,
+			UserID:        created.UserID,
+			LicensePlate:  created.LicensePlate,
+		}
+		return outbox.InsertReservationEvent(tx, r.outbox, domain.EventReservationCreated, payload)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &created, nil
 }
 
 func resolveSpotForReservation(tx *gorm.DB, zoneID uint, requested *uint) (*uint, error) {

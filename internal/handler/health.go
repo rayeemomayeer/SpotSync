@@ -15,6 +15,35 @@ type ReadinessChecker interface {
 	Ping(ctx context.Context) error
 }
 
+// MultiReadinessChecker runs all configured dependency checks.
+type MultiReadinessChecker struct {
+	Checkers []ReadinessChecker
+}
+
+func (m *MultiReadinessChecker) Ping(ctx context.Context) error {
+	for _, checker := range m.Checkers {
+		if checker == nil {
+			continue
+		}
+		if err := checker.Ping(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RedisReadinessChecker pings Redis when configured.
+type RedisReadinessChecker struct {
+	PingFn func(ctx context.Context) error
+}
+
+func (c *RedisReadinessChecker) Ping(ctx context.Context) error {
+	if c == nil || c.PingFn == nil {
+		return nil
+	}
+	return c.PingFn(ctx)
+}
+
 // DBReadinessChecker adapts a database pinger for readiness probes.
 type DBReadinessChecker struct {
 	PingFn func(ctx context.Context) error

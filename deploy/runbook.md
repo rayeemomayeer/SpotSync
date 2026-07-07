@@ -69,7 +69,7 @@ API_BASE=http://localhost:8080/api/v1 k6 run test/load/reserve_stampede.js
 
 ## Capacity strategies
 
-`CAPACITY_STRATEGY` accepts `row_lock` (default, production), `optimistic`, `redis_counter`. Only `row_lock` is fully implemented; others delegate to row lock until wired.
+`CAPACITY_STRATEGY` accepts `row_lock` (default), `optimistic`, `redis_counter`. All three are implemented; `redis_counter` requires `REDIS_URL` and uses Postgres row lock as final arbiter after Redis fast-reject.
 
 ## Kubernetes (local / CI)
 
