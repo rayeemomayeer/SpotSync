@@ -3,10 +3,12 @@ package app
 import (
 	"context"
 	"log/slog"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/rayeemomayeer/SpotSync/internal/cache"
 	"github.com/rayeemomayeer/SpotSync/internal/config"
 	"github.com/rayeemomayeer/SpotSync/internal/handler"
 	appmw "github.com/rayeemomayeer/SpotSync/internal/middleware"
@@ -22,6 +24,7 @@ const defaultAuthRateLimitPerMinute = 20
 type Options struct {
 	AuthRateLimitPerMinute int
 	EnableRequestLogger    bool
+	RedisClient            *platform.RedisClient
 }
 
 func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*echo.Echo, *realtime.Hub) {
@@ -38,13 +41,19 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 
 	tokenManager := platform.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiry)
 	authSvc := service.NewAuthService(userRepo, tokenManager, cfg.BcryptCost, cfg.AllowSelfAdminRegistration)
-	zoneSvc := service.NewZoneService(zoneRepo, spotRepo, reservationRepo)
+
+	var availCache *cache.AvailabilityCache
+	if opts.RedisClient != nil {
+		availCache = cache.NewAvailabilityCache(opts.RedisClient, 30*time.Second)
+	}
+
+	zoneSvc := service.NewZoneService(zoneRepo, spotRepo, reservationRepo, availCache)
 	reservationSvc := service.NewReservationService(reservationRepo, zoneRepo, cfg.DemoReservationTTL)
 	spotSvc := service.NewSpotService(spotRepo, reservationRepo)
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	zoneHandler := handler.NewZoneHandler(zoneSvc)
-	reservationHandler := handler.NewReservationHandler(reservationSvc, hub)
+	reservationHandler := handler.NewReservationHandler(reservationSvc, hub, zoneSvc)
 	spotHandler := handler.NewSpotHandler(spotSvc)
 	sseHandler := handler.NewSSEHandler(hub)
 

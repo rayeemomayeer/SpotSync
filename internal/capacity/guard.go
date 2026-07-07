@@ -33,7 +33,8 @@ func (g RowLockGuard) Reserve(ctx context.Context, p repository.CreateReservatio
 func NewGuard(strategy string, repo *repository.ReservationRepository) Guard {
 	switch strategy {
 	case StrategyOptimistic, StrategyRedis:
-		// Future strategies delegate to row lock until fully wired.
+// Future strategies delegate to row lock until fully wired.
+// See deploy/runbook.md — optimistic/redis_counter are intentionally deferred.
 		fallthrough
 	default:
 		return NewRowLockGuard(repo)

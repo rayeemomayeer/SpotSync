@@ -46,11 +46,6 @@ func run() error {
 		}
 	}
 
-	e, hub := app.NewEcho(cfg, db, log, app.Options{
-		AuthRateLimitPerMinute: 20,
-		EnableRequestLogger:    true,
-	})
-
 	redisClient, err := platform.NewRedisClient(cfg.RedisURL)
 	if err != nil {
 		log.Warn("redis unavailable", "error", err)
@@ -58,6 +53,12 @@ func run() error {
 	if redisClient != nil {
 		defer redisClient.Close()
 	}
+
+	e, hub := app.NewEcho(cfg, db, log, app.Options{
+		AuthRateLimitPerMinute: 20,
+		EnableRequestLogger:    true,
+		RedisClient:            redisClient,
+	})
 
 	reservationRepo := repository.NewReservationRepository(db)
 	expiryCtx, expiryCancel := context.WithCancel(context.Background())

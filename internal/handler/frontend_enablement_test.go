@@ -129,7 +129,7 @@ func TestReservationHandler_ListAllPaginationHeaders(t *testing.T) {
 				Paginated: true,
 			}, nil
 		},
-	}, nil)
+	}, nil, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/reservations?page=2&limit=10", nil)
 	rec := httptest.NewRecorder()

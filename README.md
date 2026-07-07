@@ -5,8 +5,17 @@
 [![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-- **Live API:** https://spotsync-ei6g.onrender.com
-- **API base path:** `/api/v1`
+## Quick links
+
+| | |
+| --- | --- |
+| **Live API** | https://spotsync-ei6g.onrender.com |
+| **API base** | https://spotsync-ei6g.onrender.com/api/v1 |
+| **Live frontend** | https://spotsync-nu.vercel.app |
+| **This repo** | https://github.com/rayeemomayeer/SpotSync |
+| **Frontend repo** | https://github.com/rayeemomayeer/spotsync-web |
+
+**Health:** `curl https://spotsync-ei6g.onrender.com/healthz` → `{"status":"ok"}`
 
 ---
 
@@ -47,7 +56,9 @@ SpotSync treats that race as the central engineering problem. The reservation pa
 - **Demo reservation TTL** — `X-Demo-Reservation: true` auto-expires showcase bookings; lazy cleanup on spot list and my-reservations reads.
 - **Ownership-scoped actions** — drivers cancel only their own reservations; admins list all reservations.
 - **Consistent API contract** — `{success, message, data}` / `{success, message, errors}` envelope on every response.
-- **Operational endpoints** — `/healthz`, `/readyz`, structured request logging, CORS, auth rate limiting.
+- **Operational endpoints** — `/healthz`, `/readyz`, `/metrics`, structured request logging, CORS, auth rate limiting.
+- **Real-time SSE** — `GET /zones/stream` (all zones) and `GET /zones/:id/events` (per zone).
+- **Redis cache-aside** — zone availability counts cached when `REDIS_URL` is set; invalidated on reserve/cancel.
 
 ---
 
@@ -62,7 +73,9 @@ SpotSync treats that race as the central engineering problem. The reservation pa
 | Validation | go-playground/validator/v10 |
 | Auth | golang-jwt/jwt/v5 + bcrypt |
 | Migrations | golang-migrate (embedded SQL) |
-| Deploy | [Render](https://render.com/) (Docker web service) |
+| Deploy | [Render](https://render.com/) (Docker web + worker) |
+| Cache / pub-sub | Redis (optional — [Upstash](https://upstash.com/) on Render) |
+| Frontend | [spotsync-web](https://github.com/rayeemomayeer/spotsync-web) on [Vercel](https://spotsync-nu.vercel.app) |
 
 ---
 
@@ -416,20 +429,33 @@ If you don't have Postgres yet:
 
 ### CORS
 
-Set `CORS_ALLOWED_ORIGINS` on Render to your frontend origin(s), comma-separated.
+`render.yaml` sets `CORS_ALLOWED_ORIGINS=https://spotsync-nu.vercel.app`. Add preview URLs comma-separated if needed. When unset locally, all origins are allowed (`*`).
+
+### Worker + Redis (recommended for production)
+
+- **Worker** (`spotsync-worker` in `render.yaml`) — relays outbox events and runs scheduled expiry.
+- **Redis** — set `REDIS_URL` on both API and worker for cross-replica SSE and availability cache.
+
+See [deploy/runbook.md](./deploy/runbook.md) for deploy, rollback, and observability.
 
 ---
 
 ## Roadmap
 
-- [x] **Phase 0 — Graded baseline** — auth, RBAC, zones, concurrency-safe reservations, contract tests.
-- [x] **Phase 0.5 — Frontend-enablement** — `/auth/me`, pagination headers, zone filters, admin CRUD.
-- [x] **Phase 0.6 — Bookable spots** — map coordinates, optional `spot_id`, demo TTL.
-- [x] **Phase 1 — Event-driven** — transactional outbox, worker relay, time-based expiry.
-- [x] **Phase 2 — Real-time** — Redis pub/sub, SSE (`/zones/stream`, `/zones/:id/events`).
-- [x] **Phase 3 — Distributed** — pluggable capacity guard (row-lock default), Nginx config.
-- [x] **Phase 4 — Observability** — Prometheus `/metrics`, k6 stampede script, compose stack.
-- [x] **Phase 5 — Kubernetes** — kind manifests, HPA, worker image.
+| Phase | Status | Notes |
+| --- | --- | --- |
+| **0 — Graded baseline** | Done | Nine frozen endpoints, contract tests, stampede proof |
+| **0.5 — Frontend-enablement** | Done | Pagination, filters, admin CRUD |
+| **0.6 — Bookable spots** | Done | `spot_id`, demo TTL, map coordinates in DB |
+| **1 — Event-driven** | Done | Outbox + worker (`cmd/worker`); deploy via `render.yaml` |
+| **2 — Real-time** | Done | SSE + Redis bridge; availability cache wired |
+| **3 — Distributed** | Partial | `row_lock` production default; `optimistic` / `redis_counter` delegate to row lock |
+| **4 — Observability** | Done | Prometheus `/metrics`, k6 in CI, compose + Grafana guide |
+| **5 — Kubernetes** | Scaffold | kind manifests; production uses Render |
+| **F — Frontend** | Done | [Live Console](https://spotsync-nu.vercel.app) (separate repo) |
+| **6 — AI** | Deferred | Optional satellite |
+
+Release tags: `v1.0.0-graded` … `v1.5.0-k8s` (see git tags).
 
 ---
 

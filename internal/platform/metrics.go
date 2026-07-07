@@ -20,6 +20,16 @@ var (
 		Name: "oversell_attempts_rejected_total",
 		Help: "Total reservation attempts rejected because zone was full",
 	})
+
+	zoneAvailCacheHits = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "zone_availability_cache_hits_total",
+		Help: "Zone availability cache hits on GET /zones/:id",
+	})
+
+	zoneAvailCacheMisses = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "zone_availability_cache_misses_total",
+		Help: "Zone availability cache misses on GET /zones/:id",
+	})
 )
 
 func MetricsMiddleware() echo.MiddlewareFunc {
@@ -42,4 +52,12 @@ func MetricsMiddleware() echo.MiddlewareFunc {
 
 func RecordOversellRejected() {
 	oversellRejected.Inc()
+}
+
+func RecordZoneAvailCacheHit() {
+	zoneAvailCacheHits.Inc()
+}
+
+func RecordZoneAvailCacheMiss() {
+	zoneAvailCacheMisses.Inc()
 }

@@ -122,7 +122,7 @@ func TestZoneService_UpdateCapacityBelowActive(t *testing.T) {
 		},
 	}, &mockSpotZoneManager{}, &mockZoneActiveCounter{
 		countFn: func(context.Context, uint) (int64, error) { return 5, nil },
-	})
+	}, nil)
 
 	_, err := svc.Update(context.Background(), 1, dto.UpdateZoneRequest{
 		Name: "Lot", Type: models.ZoneTypeGeneral, TotalCapacity: 4, PricePerHour: 3,
@@ -142,7 +142,7 @@ func TestZoneService_DeleteDelegates(t *testing.T) {
 			}
 			return nil
 		},
-	}, &mockSpotZoneManager{}, &mockZoneActiveCounter{})
+	}, &mockSpotZoneManager{}, &mockZoneActiveCounter{}, nil)
 
 	if err := svc.Delete(context.Background(), 9); err != nil {
 		t.Fatal(err)
@@ -162,7 +162,7 @@ func TestZoneService_ListPassesFilters(t *testing.T) {
 				{ParkingZone: models.ParkingZone{ID: 1, Name: "Terminal"}, AvailableSpots: 3},
 			}, nil
 		},
-	}, &mockSpotZoneManager{}, &mockZoneActiveCounter{})
+	}, &mockSpotZoneManager{}, &mockZoneActiveCounter{}, nil)
 
 	zones, err := svc.List(context.Background(), dto.ZoneListQuery{
 		Type: "ev_charging", Q: "Terminal", Sort: "name", Order: "desc",

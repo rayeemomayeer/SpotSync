@@ -3,7 +3,9 @@ package service
 import (
 	"context"
 
+	"github.com/rayeemomayeer/SpotSync/internal/cache"
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
+	"github.com/rayeemomayeer/SpotSync/internal/platform"
 	"github.com/rayeemomayeer/SpotSync/internal/domain/spots"
 	"github.com/rayeemomayeer/SpotSync/internal/dto"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
@@ -36,10 +38,23 @@ type ZoneService struct {
 	zones        ZoneStore
 	spots        SpotZoneManager
 	reservations ZoneActiveCounter
+	availCache   *cache.AvailabilityCache
 }
 
-func NewZoneService(zones ZoneStore, spots SpotZoneManager, reservations ZoneActiveCounter) *ZoneService {
-	return &ZoneService{zones: zones, spots: spots, reservations: reservations}
+func NewZoneService(
+	zones ZoneStore,
+	spots SpotZoneManager,
+	reservations ZoneActiveCounter,
+	availCache *cache.AvailabilityCache,
+) *ZoneService {
+	return &ZoneService{zones: zones, spots: spots, reservations: reservations, availCache: availCache}
+}
+
+func (s *ZoneService) InvalidateAvailability(ctx context.Context, zoneID uint) {
+	if s.availCache == nil {
+		return
+	}
+	_ = s.availCache.Invalidate(ctx, zoneID)
 }
 
 func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest) (dto.ZoneResponse, error) {
@@ -77,6 +92,7 @@ func (s *ZoneService) List(ctx context.Context, q dto.ZoneListQuery) ([]dto.Zone
 	if err != nil {
 		return nil, err
 	}
+	s.warmAvailabilityCache(ctx, rows)
 	return mapZoneRows(rows), nil
 }
 
@@ -85,7 +101,19 @@ func (s *ZoneService) GetByID(ctx context.Context, id uint) (dto.ZoneResponse, e
 	if err != nil {
 		return dto.ZoneResponse{}, err
 	}
-	return dto.ZoneFromModel(row.ParkingZone, row.AvailableSpots), nil
+
+	available := row.AvailableSpots
+	if s.availCache != nil {
+		if cached, ok := s.availCache.Get(ctx, id); ok {
+			platform.RecordZoneAvailCacheHit()
+			available = cached
+		} else {
+			platform.RecordZoneAvailCacheMiss()
+			_ = s.availCache.Set(ctx, id, available)
+		}
+	}
+
+	return dto.ZoneFromModel(row.ParkingZone, available), nil
 }
 
 func (s *ZoneService) Update(ctx context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error) {
@@ -202,6 +230,15 @@ func (s *ZoneService) syncZoneTotalCapacity(ctx context.Context, zoneID uint) er
 	}
 	zone.TotalCapacity = capacity
 	return s.zones.Update(ctx, zone)
+}
+
+func (s *ZoneService) warmAvailabilityCache(ctx context.Context, rows []repository.ZoneAvailabilityRow) {
+	if s.availCache == nil {
+		return
+	}
+	for _, row := range rows {
+		_ = s.availCache.Set(ctx, row.ID, row.AvailableSpots)
+	}
 }
 
 func mapZoneRows(rows []repository.ZoneAvailabilityRow) []dto.ZoneResponse {

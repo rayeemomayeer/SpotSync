@@ -26,10 +26,19 @@ type ReservationService interface {
 type ReservationHandler struct {
 	reservations ReservationService
 	hub          *realtime.Hub
+	zones        ZoneAvailabilityInvalidator
 }
 
-func NewReservationHandler(reservations ReservationService, hub *realtime.Hub) *ReservationHandler {
-	return &ReservationHandler{reservations: reservations, hub: hub}
+type ZoneAvailabilityInvalidator interface {
+	InvalidateAvailability(ctx context.Context, zoneID uint)
+}
+
+func NewReservationHandler(
+	reservations ReservationService,
+	hub *realtime.Hub,
+	zones ZoneAvailabilityInvalidator,
+) *ReservationHandler {
+	return &ReservationHandler{reservations: reservations, hub: hub, zones: zones}
 }
 
 func (h *ReservationHandler) Create(c echo.Context) error {
@@ -56,6 +65,7 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 	}
 
 	h.publishReserved(res)
+	h.invalidateZoneCache(c.Request().Context(), res.ZoneID)
 
 	return JSONSuccess(c, http.StatusCreated, "Reservation created successfully", res)
 }
@@ -125,8 +135,15 @@ func (h *ReservationHandler) Cancel(c echo.Context) error {
 	}
 
 	h.publishReleased(cancelled)
+	h.invalidateZoneCache(c.Request().Context(), cancelled.ZoneID)
 
 	return NoContentSuccess(c, "Reservation cancelled successfully")
+}
+
+func (h *ReservationHandler) invalidateZoneCache(ctx context.Context, zoneID uint) {
+	if h.zones != nil {
+		h.zones.InvalidateAvailability(ctx, zoneID)
+	}
 }
 
 func (h *ReservationHandler) ListAll(c echo.Context) error {
