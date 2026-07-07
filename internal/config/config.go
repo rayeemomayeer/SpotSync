@@ -27,6 +27,7 @@ const (
 type Config struct {
 	Port                       string
 	DatabaseURL                string
+	DatabaseMigrateURL         string
 	JWTSecret                  string
 	JWTExpiry                  time.Duration
 	BcryptCost                 int
@@ -140,6 +141,7 @@ func (c *Config) parseOptionalFields() error {
 	}
 
 	c.RedisURL = strings.TrimSpace(os.Getenv("REDIS_URL"))
+	c.DatabaseMigrateURL = strings.TrimSpace(os.Getenv("DATABASE_MIGRATE_URL"))
 	c.CapacityStrategy = envOrDefault("CAPACITY_STRATEGY", "row_lock")
 
 	return nil

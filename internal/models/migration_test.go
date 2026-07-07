@@ -20,7 +20,7 @@ func TestMigrationCreatesGradedTables(t *testing.T) {
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	if err := platform.RunMigrations(databaseURL, "migrations", log); err != nil {
+	if err := platform.RunMigrations(databaseURL, "", "migrations", log); err != nil {
 		if isPostgresUnavailable(err) {
 			t.Skipf("postgres not available: %v", err)
 		}

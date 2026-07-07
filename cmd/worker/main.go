@@ -38,7 +38,7 @@ func run() error {
 	}
 
 	if cfg.MigrateOnStartup {
-		if err := platform.RunMigrations(cfg.DatabaseURL, cfg.MigrationsPath, log); err != nil {
+		if err := platform.RunMigrations(cfg.DatabaseURL, cfg.DatabaseMigrateURL, cfg.MigrationsPath, log); err != nil {
 			return fmt.Errorf("run migrations: %w", err)
 		}
 	}

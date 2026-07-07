@@ -53,7 +53,7 @@ func SetupPostgres(t *testing.T) (*gorm.DB, string) {
 		t.Fatalf("connection string: %v", err)
 	}
 
-	if err := platform.RunMigrations(connStr, "migrations", nil); err != nil {
+	if err := platform.RunMigrations(connStr, "", "migrations", nil); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 

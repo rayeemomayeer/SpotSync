@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"log/slog"
+	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -14,7 +15,7 @@ import (
 
 // RunMigrations applies all pending up migrations embedded in the migrations package.
 // migrationsPath is retained for Makefile CLI parity; runtime migrate uses the embedded FS.
-func RunMigrations(databaseURL, migrationsPath string, log *slog.Logger) error {
+func RunMigrations(databaseURL, migrateOverride, migrationsPath string, log *slog.Logger) error {
 	_ = migrationsPath
 
 	source, err := iofs.New(appmigrations.Files, ".")
@@ -22,7 +23,12 @@ func RunMigrations(databaseURL, migrationsPath string, log *slog.Logger) error {
 		return fmt.Errorf("open migration source: %w", err)
 	}
 
-	m, err := migrate.NewWithSourceInstance("iofs", source, databaseURL)
+	migrateURL := MigrationDatabaseURL(databaseURL, migrateOverride)
+	if log != nil && migrateURL != strings.TrimSpace(databaseURL) {
+		log.Info("using alternate url for migrations")
+	}
+
+	m, err := migrate.NewWithSourceInstance("iofs", source, migrateURL)
 	if err != nil {
 		return fmt.Errorf("create migrator: %w", err)
 	}

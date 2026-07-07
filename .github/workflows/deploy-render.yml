@@ -1,9 +1,8 @@
 name: Deploy Render
 
+# Manual deploy trigger only. Render GitHub auto-deploy handles pushes to main.
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 
 jobs:
   deploy:
@@ -18,9 +17,9 @@ jobs:
           RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
         run: |
           if [ -z "$RENDER_API_KEY" ] || [ -z "$RENDER_SERVICE_ID" ]; then
-            echo "RENDER_API_KEY / RENDER_SERVICE_ID not set — skipping API trigger."
-            echo "If Render GitHub auto-deploy is enabled, this push still deploys from the dashboard hook."
-            exit 0
+            echo "RENDER_API_KEY / RENDER_SERVICE_ID not set — cannot trigger deploy."
+            echo "Set both secrets or rely on Render dashboard auto-deploy from GitHub."
+            exit 1
           fi
 
           DEPLOY_ID=$(curl -fsS -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
