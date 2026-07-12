@@ -5,23 +5,31 @@ import (
 	"net/http"
 
 	"github.com/labstack/echo/v4"
+	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/dto"
+	appmw "github.com/rayeemomayeer/SpotSync/internal/middleware"
+	"github.com/rayeemomayeer/SpotSync/internal/models"
 )
 
 type ZoneService interface {
-	Create(ctx context.Context, req dto.CreateZoneRequest) (dto.ZoneResponse, error)
+	Create(ctx context.Context, req dto.CreateZoneRequest, orgID *uint) (dto.ZoneResponse, error)
 	List(ctx context.Context, q dto.ZoneListQuery) ([]dto.ZoneResponse, error)
 	GetByID(ctx context.Context, id uint) (dto.ZoneResponse, error)
 	Update(ctx context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error)
 	Delete(ctx context.Context, id uint) error
 }
 
-type ZoneHandler struct {
-	zones ZoneService
+type OrgResolver interface {
+	PrimaryOrgID(ctx context.Context, userID uint) (*uint, error)
 }
 
-func NewZoneHandler(zones ZoneService) *ZoneHandler {
-	return &ZoneHandler{zones: zones}
+type ZoneHandler struct {
+	zones ZoneService
+	orgs  OrgResolver
+}
+
+func NewZoneHandler(zones ZoneService, orgs OrgResolver) *ZoneHandler {
+	return &ZoneHandler{zones: zones, orgs: orgs}
 }
 
 func (h *ZoneHandler) Create(c echo.Context) error {
@@ -30,7 +38,23 @@ func (h *ZoneHandler) Create(c echo.Context) error {
 		return err
 	}
 
-	zone, err := h.zones.Create(c.Request().Context(), req)
+	var orgID *uint
+	userID, _ := appmw.UserID(c)
+	role := appmw.Role(c)
+	if role == models.RoleOrgAdmin && h.orgs != nil {
+		id, err := h.orgs.PrimaryOrgID(c.Request().Context(), userID)
+		if err != nil {
+			return err
+		}
+		if id == nil {
+			return domain.NewValidationError("Validation failed", map[string]string{
+				"organization": "Org admin must belong to an organization",
+			})
+		}
+		orgID = id
+	}
+
+	zone, err := h.zones.Create(c.Request().Context(), req, orgID)
 	if err != nil {
 		return err
 	}
@@ -97,5 +121,5 @@ func (h *ZoneHandler) Delete(c echo.Context) error {
 		return err
 	}
 
-	return NoContentSuccess(c, "Zone deleted successfully")
+	return JSONSuccess(c, http.StatusOK, "Zone deleted successfully", nil)
 }

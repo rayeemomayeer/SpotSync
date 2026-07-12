@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"github.com/labstack/echo/v4"
-	"github.com/rayeemomayeer/SpotSync/internal/models"
 )
 
 const (
@@ -24,8 +23,4 @@ func Role(c echo.Context) string {
 func GetRequestID(c echo.Context) string {
 	v, _ := c.Get(keyRequestID).(string)
 	return v
-}
-
-func IsAdmin(c echo.Context) bool {
-	return Role(c) == models.RoleAdmin
 }

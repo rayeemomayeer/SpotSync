@@ -23,6 +23,7 @@ func ZoneFromModel(z models.ParkingZone, availableSpots int) ZoneResponse {
 		TotalCapacity:  z.TotalCapacity,
 		PricePerHour:   z.PricePerHour,
 		AvailableSpots: availableSpots,
+		OrganizationID: z.OrganizationID,
 		CreatedAt:      z.CreatedAt,
 		UpdatedAt:      z.UpdatedAt,
 	}

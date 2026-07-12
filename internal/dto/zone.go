@@ -30,6 +30,7 @@ type ZoneResponse struct {
 	TotalCapacity  int       `json:"total_capacity"`
 	PricePerHour   float64   `json:"price_per_hour"`
 	AvailableSpots int       `json:"available_spots"`
+	OrganizationID *uint     `json:"organization_id,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
 	UpdatedAt      time.Time `json:"updated_at"`
 }

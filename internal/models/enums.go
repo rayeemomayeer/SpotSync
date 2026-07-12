@@ -1,9 +1,11 @@
 package models
 
-// User roles (graded contract).
+// User roles (graded contract keeps driver/admin; marketplace adds saas_admin/org_admin).
 const (
-	RoleDriver = "driver"
-	RoleAdmin  = "admin"
+	RoleDriver    = "driver"
+	RoleAdmin     = "admin" // graded contract + legacy platform admin
+	RoleSaaSAdmin = "saas_admin"
+	RoleOrgAdmin  = "org_admin"
 )
 
 // Parking zone types (graded contract).

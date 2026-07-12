@@ -57,12 +57,13 @@ func (s *ZoneService) InvalidateAvailability(ctx context.Context, zoneID uint) {
 	_ = s.availCache.Invalidate(ctx, zoneID)
 }
 
-func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest) (dto.ZoneResponse, error) {
+func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest, orgID *uint) (dto.ZoneResponse, error) {
 	zone := &models.ParkingZone{
-		Name:          req.Name,
-		Type:          req.Type,
-		TotalCapacity: req.TotalCapacity,
-		PricePerHour:  req.PricePerHour,
+		Name:           req.Name,
+		Type:           req.Type,
+		TotalCapacity:  req.TotalCapacity,
+		PricePerHour:   req.PricePerHour,
+		OrganizationID: orgID,
 	}
 	if err := s.zones.Create(ctx, zone); err != nil {
 		return dto.ZoneResponse{}, err

@@ -39,6 +39,9 @@ func (r *Relay) RunOnce(ctx context.Context) (int, error) {
 			if r.log != nil {
 				r.log.Error("outbox relay failed", "event_id", ev.ID, "error", err)
 			}
+			if markErr := r.outbox.RecordFailure(ctx, ev.ID, err.Error()); markErr != nil && r.log != nil {
+				r.log.Error("outbox failure record failed", "event_id", ev.ID, "error", markErr)
+			}
 			continue
 		}
 		if err := r.outbox.MarkProcessed(ctx, ev.ID); err != nil {

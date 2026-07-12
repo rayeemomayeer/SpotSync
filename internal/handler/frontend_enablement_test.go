@@ -21,7 +21,7 @@ type stubZoneService struct {
 	deleteFn func(ctx context.Context, id uint) error
 }
 
-func (s *stubZoneService) Create(context.Context, dto.CreateZoneRequest) (dto.ZoneResponse, error) {
+func (s *stubZoneService) Create(context.Context, dto.CreateZoneRequest, *uint) (dto.ZoneResponse, error) {
 	return dto.ZoneResponse{}, nil
 }
 
@@ -78,7 +78,7 @@ func TestZoneHandler_ListInvalidSort(t *testing.T) {
 	e.Validator = handler.NewValidator()
 	e.HTTPErrorHandler = handler.HTTPErrorHandler
 
-	h := handler.NewZoneHandler(&stubZoneService{})
+	h := handler.NewZoneHandler(&stubZoneService{}, nil)
 	req := httptest.NewRequest(http.MethodGet, "/api/v1/zones?sort=invalid", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
@@ -99,7 +99,7 @@ func TestZoneHandler_DeleteActiveReservationsConflict(t *testing.T) {
 		deleteFn: func(context.Context, uint) error {
 			return domain.ErrZoneHasActiveReservations
 		},
-	})
+	}, nil)
 
 	req := httptest.NewRequest(http.MethodDelete, "/api/v1/zones/1", nil)
 	rec := httptest.NewRecorder()
@@ -189,7 +189,7 @@ func TestZoneHandler_Update(t *testing.T) {
 		updateFn: func(_ context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error) {
 			return dto.ZoneResponse{ID: id, Name: req.Name}, nil
 		},
-	})
+	}, nil)
 
 	body := `{"name":"Updated Lot","type":"general","total_capacity":10,"price_per_hour":4.5}`
 	req := httptest.NewRequest(http.MethodPut, "/api/v1/zones/3", strings.NewReader(body))

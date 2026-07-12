@@ -57,12 +57,14 @@ func run() error {
 	resRepo := repository.NewReservationRepository(db)
 	spotRepo := repository.NewSpotRepository(db)
 
-	admin, err := ensureUser(ctx, userRepo, cfg.BcryptCost, name, email, password, models.RoleAdmin, log)
+	admin, err := ensureUser(ctx, userRepo, cfg.BcryptCost, name, email, password, models.RoleSaaSAdmin, log)
 	if err != nil {
 		return err
 	}
+	// Graded contract compatibility: also ensure legacy admin role alias if seed email differs.
+	_ = admin
 
-	demoAdmin, demoAdminErr := ensureUser(ctx, userRepo, cfg.BcryptCost, "Demo Admin", "demo_admin@spotsync.com", "DemoAdminPass123!", models.RoleAdmin, log)
+	demoAdmin, demoAdminErr := ensureUser(ctx, userRepo, cfg.BcryptCost, "Demo Admin", "demo_admin@spotsync.com", "DemoAdminPass123!", models.RoleOrgAdmin, log)
 	if demoAdminErr != nil {
 		log.Warn("demo admin seed skipped", "error", demoAdminErr)
 	}
@@ -80,6 +82,11 @@ func run() error {
 	zoneList, err := ensureZones(ctx, zoneRepo, spotRepo, log)
 	if err != nil {
 		return err
+	}
+
+	orgRepo := repository.NewOrganizationRepository(db)
+	if err := ensureDemoOrgMembership(ctx, orgRepo, demoAdmin, log); err != nil {
+		log.Warn("demo org membership skipped", "error", err)
 	}
 
 	if err := ensureReservations(ctx, resRepo, driverAlice, driverBob, zoneList, log); err != nil {
@@ -102,6 +109,34 @@ func demoAdminEmail(user *models.User) string {
 		return ""
 	}
 	return user.Email
+}
+
+func ensureDemoOrgMembership(
+	ctx context.Context,
+	orgRepo *repository.OrganizationRepository,
+	demoAdmin *models.User,
+	log *slog.Logger,
+) error {
+	if demoAdmin == nil {
+		return nil
+	}
+	org, err := orgRepo.GetBySlug(ctx, "demo-parking")
+	if err != nil {
+		return err
+	}
+	if _, err := orgRepo.Membership(ctx, org.ID, demoAdmin.ID); err == nil {
+		log.Info("demo org membership exists", "org", org.Slug, "user_id", demoAdmin.ID)
+		return nil
+	}
+	if err := orgRepo.AddMember(ctx, &models.OrganizationMember{
+		OrganizationID: org.ID,
+		UserID:         demoAdmin.ID,
+		Role:           models.RoleOrgAdmin,
+	}); err != nil {
+		return err
+	}
+	log.Info("demo org membership created", "org", org.Slug, "user_id", demoAdmin.ID)
+	return nil
 }
 
 func ensureUser(

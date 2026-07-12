@@ -125,6 +125,13 @@ func (r *RedisClient) Exists(ctx context.Context, key string) (bool, error) {
 	return n > 0, err
 }
 
+func (r *RedisClient) Eval(ctx context.Context, script string, keys []string, args ...interface{}) (int64, error) {
+	if r == nil || r.client == nil {
+		return 0, fmt.Errorf("redis not configured")
+	}
+	return redis.NewScript(script).Run(ctx, r.client, keys, args...).Int64()
+}
+
 func (r *RedisClient) SetNX(ctx context.Context, key string, value int64) error {
 	if r == nil || r.client == nil {
 		return fmt.Errorf("redis not configured")

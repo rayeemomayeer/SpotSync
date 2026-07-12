@@ -39,7 +39,7 @@ func (r *Repository) FetchUnprocessed(ctx context.Context, limit int) ([]models.
 	}
 	var list []models.OutboxEvent
 	err := r.db.WithContext(ctx).
-		Where("processed_at IS NULL").
+		Where("processed_at IS NULL AND dead_lettered_at IS NULL").
 		Order("id ASC").
 		Limit(limit).
 		Find(&list).Error
@@ -52,6 +52,18 @@ func (r *Repository) MarkProcessed(ctx context.Context, id uint) error {
 		Model(&models.OutboxEvent{}).
 		Where("id = ? AND processed_at IS NULL", id).
 		Update("processed_at", now).Error
+}
+
+const maxOutboxAttempts = 5
+
+func (r *Repository) RecordFailure(ctx context.Context, id uint, errMsg string) error {
+	return r.db.WithContext(ctx).Exec(`
+UPDATE outbox_events
+SET attempts = attempts + 1,
+    last_error = ?,
+    dead_lettered_at = CASE WHEN attempts + 1 >= ? THEN NOW() ELSE dead_lettered_at END
+WHERE id = ? AND processed_at IS NULL
+`, errMsg, maxOutboxAttempts, id).Error
 }
 
 func InsertReservationEvent(tx *gorm.DB, repo *Repository, eventType string, payload domain.ReservationEventPayload) error {

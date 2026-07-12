@@ -57,11 +57,16 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	reservationSvc := service.NewReservationService(reservationRepo, capacityGuard, zoneRepo, cfg.DemoReservationTTL)
 	spotSvc := service.NewSpotService(spotRepo, reservationRepo)
 
+	orgRepo := repository.NewOrganizationRepository(db)
+	auditRepo := repository.NewAuditRepository(db)
+	orgSvc := service.NewOrganizationService(orgRepo, auditRepo)
+
 	authHandler := handler.NewAuthHandler(authSvc)
-	zoneHandler := handler.NewZoneHandler(zoneSvc)
+	zoneHandler := handler.NewZoneHandler(zoneSvc, orgSvc)
 	reservationHandler := handler.NewReservationHandler(reservationSvc, hub, zoneSvc)
 	spotHandler := handler.NewSpotHandler(spotSvc)
 	sseHandler := handler.NewSSEHandler(hub)
+	orgHandler := handler.NewOrganizationHandler(orgSvc)
 
 	readinessCheckers := []handler.ReadinessChecker{
 		&handler.DBReadinessChecker{
@@ -104,7 +109,14 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	jwtAuth := appmw.JWTAuth(tokenManager)
 	sseAuth := appmw.JWTAuthFromHeaderOrQuery(tokenManager)
 	requireAdmin := appmw.RequireAdmin()
-	authRateLimit := appmw.IPRateLimit(opts.AuthRateLimitPerMinute)
+
+	var authRateLimit echo.MiddlewareFunc
+	if opts.RedisClient != nil {
+		store := appmw.NewRedisRateStore(opts.RedisClient.Eval)
+		authRateLimit = appmw.IPRateLimitRedis(opts.AuthRateLimitPerMinute, store)
+	} else {
+		authRateLimit = appmw.IPRateLimit(opts.AuthRateLimitPerMinute)
+	}
 
 	v1 := e.Group("/api/v1")
 
@@ -129,6 +141,14 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	reservations.GET("/my-reservations", reservationHandler.ListMine)
 	reservations.DELETE("/:id", reservationHandler.Cancel)
 	reservations.GET("", reservationHandler.ListAll, requireAdmin)
+
+	requirePlatform := appmw.RequirePlatformAdmin()
+	orgs := v1.Group("/orgs", jwtAuth)
+	orgs.POST("", orgHandler.Create, requirePlatform)
+	orgs.GET("", orgHandler.List, requirePlatform)
+	orgs.GET("/:id", orgHandler.Get, requireAdmin)
+	orgs.PATCH("/:id/status", orgHandler.SetStatus, requirePlatform)
+	orgs.GET("/audit", orgHandler.ListAudit, requireAdmin)
 
 	return e, hub
 }
