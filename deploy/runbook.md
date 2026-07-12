@@ -54,10 +54,12 @@ DATABASE_URL="your-neon-url" go run ./cmd/seed
 | Signal | Where |
 | --- | --- |
 | Request logs | Render logs (structured `slog`, `X-Request-Id`) |
-| `reservation_latency_seconds` | `/metrics` |
+| `reservation_latency_seconds` | `/metrics` (requires `Authorization: Bearer $METRICS_TOKEN` or `?token=` when set) |
 | `oversell_attempts_rejected_total` | `/metrics` |
 | `zone_availability_cache_hits_total` | `/metrics` (when Redis configured) |
 | Local stack | `docker compose -f deploy/compose/docker-compose.yml up` + Prometheus on `:9090` |
+
+SSE zone streams require a JWT (`Authorization: Bearer` or `?access_token=`). Set `ALLOW_SELF_ADMIN_REGISTRATION=false` in production and seed admins. Set `METRICS_TOKEN` on Render. Worker + `REDIS_URL` (Upstash free) recommended for outbox relay and multi-replica SSE.
 
 ## Load test (k6)
 

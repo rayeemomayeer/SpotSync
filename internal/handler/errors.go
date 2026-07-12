@@ -74,6 +74,10 @@ func mapError(err error) (status int, message string, fieldErrors map[string]str
 		return http.StatusConflict, "Zone has active reservations", map[string]string{
 			"zone": "Cannot delete a zone with active reservations",
 		}
+	case errors.Is(err, domain.ErrRateLimited):
+		return http.StatusTooManyRequests, "Too many requests", map[string]string{
+			"rate_limit": "Please try again later",
+		}
 	default:
 		return http.StatusInternalServerError, "Internal server error", fieldErrors
 	}

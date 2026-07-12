@@ -44,9 +44,8 @@ func IPRateLimit(requestsPerMinute int) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if !limiter.get(c.RealIP()).Allow() {
-				return domain.NewValidationError("Too many requests", map[string]string{
-					"rate_limit": "Please try again later",
-				})
+				c.Response().Header().Set("Retry-After", "60")
+				return domain.ErrRateLimited
 			}
 			return next(c)
 		}

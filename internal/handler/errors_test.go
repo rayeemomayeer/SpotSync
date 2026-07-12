@@ -27,6 +27,7 @@ func TestHTTPErrorHandler_domainErrors(t *testing.T) {
 		{"forbidden", domain.ErrForbidden, http.StatusForbidden, "Forbidden"},
 		{"zone full", domain.ErrZoneFull, http.StatusConflict, "Zone is full"},
 		{"duplicate email", domain.ErrDuplicateEmail, http.StatusConflict, "Email already registered"},
+		{"rate limited", domain.ErrRateLimited, http.StatusTooManyRequests, "Too many requests"},
 		{"internal", errors.New("pq: connection refused"), http.StatusInternalServerError, "Internal server error"},
 	}
 

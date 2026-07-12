@@ -42,6 +42,7 @@ type Config struct {
 	DemoReservationTTL         time.Duration
 	RedisURL                   string
 	CapacityStrategy           string
+	MetricsToken               string
 }
 
 // Load reads configuration from the environment and fails fast on missing required values.
@@ -143,6 +144,7 @@ func (c *Config) parseOptionalFields() error {
 	c.RedisURL = strings.TrimSpace(os.Getenv("REDIS_URL"))
 	c.DatabaseMigrateURL = strings.TrimSpace(os.Getenv("DATABASE_MIGRATE_URL"))
 	c.CapacityStrategy = envOrDefault("CAPACITY_STRATEGY", "row_lock")
+	c.MetricsToken = strings.TrimSpace(os.Getenv("METRICS_TOKEN"))
 
 	return nil
 }

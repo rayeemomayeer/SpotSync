@@ -90,6 +90,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 
 	e.Use(echomw.Recover())
 	e.Use(appmw.RequestID())
+	e.Use(appmw.SecurityHeaders())
 	e.Use(platform.MetricsMiddleware())
 	if opts.EnableRequestLogger && log != nil {
 		e.Use(appmw.RequestLogger(log))
@@ -98,9 +99,10 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 
 	e.GET("/healthz", health.Healthz)
 	e.GET("/readyz", health.Readyz)
-	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()))
+	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()), appmw.MetricsAuth(cfg.MetricsToken))
 
 	jwtAuth := appmw.JWTAuth(tokenManager)
+	sseAuth := appmw.JWTAuthFromHeaderOrQuery(tokenManager)
 	requireAdmin := appmw.RequireAdmin()
 	authRateLimit := appmw.IPRateLimit(opts.AuthRateLimitPerMinute)
 
@@ -113,9 +115,9 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 
 	zones := v1.Group("/zones")
 	zones.GET("", zoneHandler.List)
-	zones.GET("/stream", sseHandler.StreamAllZones)
+	zones.GET("/stream", sseHandler.StreamAllZones, sseAuth)
 	zones.GET("/:id", zoneHandler.GetByID)
-	zones.GET("/:id/events", sseHandler.StreamZoneEvents)
+	zones.GET("/:id/events", sseHandler.StreamZoneEvents, sseAuth)
 	zones.GET("/:id/spots", spotHandler.ListByZone)
 	zones.POST("", zoneHandler.Create, jwtAuth, requireAdmin)
 	zones.PUT("/:id", zoneHandler.Update, jwtAuth, requireAdmin)

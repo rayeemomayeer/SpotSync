@@ -25,7 +25,9 @@ services:
       - key: MIGRATE_ON_STARTUP
         value: "true"
       - key: ALLOW_SELF_ADMIN_REGISTRATION
-        value: "true"
+        value: "false"
+      - key: METRICS_TOKEN
+        sync: false
       - key: LOG_LEVEL
         value: info
       - key: BCRYPT_COST
