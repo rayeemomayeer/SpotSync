@@ -3,6 +3,7 @@ package handler
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
@@ -37,7 +38,14 @@ func (h *OrganizationHandler) Create(c echo.Context) error {
 }
 
 func (h *OrganizationHandler) List(c echo.Context) error {
-	list, err := h.svc.List(c.Request().Context())
+	q := strings.TrimSpace(c.QueryParam("q"))
+	var list []models.Organization
+	var err error
+	if q != "" {
+		list, err = h.svc.Search(c.Request().Context(), q)
+	} else {
+		list, err = h.svc.List(c.Request().Context())
+	}
 	if err != nil {
 		return err
 	}

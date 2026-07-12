@@ -67,6 +67,8 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	spotHandler := handler.NewSpotHandler(spotSvc)
 	sseHandler := handler.NewSSEHandler(hub)
 	orgHandler := handler.NewOrganizationHandler(orgSvc)
+	notifRepo := repository.NewNotificationRepository(db)
+	notifHandler := handler.NewNotificationHandler(notifRepo)
 
 	readinessCheckers := []handler.ReadinessChecker{
 		&handler.DBReadinessChecker{
@@ -149,6 +151,10 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	orgs.GET("/:id", orgHandler.Get, requireAdmin)
 	orgs.PATCH("/:id/status", orgHandler.SetStatus, requirePlatform)
 	orgs.GET("/audit", orgHandler.ListAudit, requireAdmin)
+
+	notifs := v1.Group("/notifications", jwtAuth)
+	notifs.GET("", notifHandler.ListMine)
+	notifs.POST("/:id/read", notifHandler.MarkRead)
 
 	return e, hub
 }

@@ -1,0 +1,285 @@
+openapi: 3.0.3
+info:
+  title: SpotSync Reservation API
+  version: 1.0.0
+  description: >
+    Go reservation engine. Graded nine endpoints remain frozen; marketplace
+    routes under /orgs are additive. Envelope: {success, message, data|errors}.
+servers:
+  - url: http://localhost:8081
+    description: Local API
+paths:
+  /healthz:
+    get:
+      summary: Liveness
+      responses:
+        "200":
+          description: OK
+  /readyz:
+    get:
+      summary: Readiness (DB + optional Redis)
+      responses:
+        "200":
+          description: Ready
+        "503":
+          description: Not ready
+  /metrics:
+    get:
+      summary: Prometheus metrics
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: token
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Prometheus text
+        "401":
+          description: Unauthorized when METRICS_TOKEN set
+  /api/v1/auth/register:
+    post:
+      summary: Register (graded)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+      responses:
+        "201":
+          description: Created
+  /api/v1/auth/login:
+    post:
+      summary: Login (graded)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+      responses:
+        "200":
+          description: Token + user
+  /api/v1/auth/me:
+    get:
+      summary: Current user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: User
+  /api/v1/zones:
+    get:
+      summary: List zones (public marketplace)
+      responses:
+        "200":
+          description: Zone array
+    post:
+      summary: Create zone (admin / org_admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Created
+  /api/v1/zones/stream:
+    get:
+      summary: SSE all zones
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: access_token
+          schema:
+            type: string
+      responses:
+        "200":
+          description: text/event-stream
+  /api/v1/zones/{id}:
+    get:
+      summary: Get zone
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Zone
+    put:
+      summary: Update zone
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Updated
+    delete:
+      summary: Delete zone
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Deleted
+  /api/v1/zones/{id}/events:
+    get:
+      summary: SSE zone events
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+        - in: query
+          name: access_token
+          schema:
+            type: string
+      responses:
+        "200":
+          description: text/event-stream
+  /api/v1/zones/{id}/spots:
+    get:
+      summary: List spots
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Spot array
+  /api/v1/reservations:
+    post:
+      summary: Create reservation (graded)
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Created
+    get:
+      summary: List all reservations (admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reservation array
+  /api/v1/reservations/my-reservations:
+    get:
+      summary: My reservations (graded)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Reservation array
+  /api/v1/reservations/{id}:
+    delete:
+      summary: Cancel reservation (graded)
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Cancelled
+  /api/v1/orgs:
+    get:
+      summary: List organizations (saas_admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Org array
+    post:
+      summary: Create organization (saas_admin)
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Created
+  /api/v1/orgs/{id}:
+    get:
+      summary: Get organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Org
+  /api/v1/orgs/{id}/status:
+    patch:
+      summary: Suspend or activate organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/IdPath"
+      responses:
+        "200":
+          description: Updated
+  /api/v1/orgs/audit:
+    get:
+      summary: Audit logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: organization_id
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Audit entries
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        role:
+          type: string
+          enum: [driver, admin]
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+        password:
+          type: string
+    ErrorEnvelope:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+        errors:
+          type: object
+          additionalProperties:
+            type: string
+x-error-catalog:
+  400: Validation failed — field map in errors
+  401: Unauthorized — missing/invalid JWT
+  403: Forbidden — RBAC
+  404: Not found
+  409: Conflict — zone full, spot taken, duplicate email
+  429: Rate limited — Retry-After header
+  500: Internal — no driver text leaked

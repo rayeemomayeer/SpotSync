@@ -45,6 +45,10 @@ func (s *OrganizationService) List(ctx context.Context) ([]models.Organization, 
 	return s.orgs.List(ctx)
 }
 
+func (s *OrganizationService) Search(ctx context.Context, q string) ([]models.Organization, error) {
+	return s.orgs.Search(ctx, q, 50)
+}
+
 func (s *OrganizationService) Get(ctx context.Context, id uint) (*models.Organization, error) {
 	org, err := s.orgs.GetByID(ctx, id)
 	if err != nil {

@@ -73,6 +73,14 @@ API_BASE=http://localhost:8080/api/v1 k6 run test/load/reserve_stampede.js
 
 `CAPACITY_STRATEGY` accepts `row_lock` (default), `optimistic`, `redis_counter`. All three are implemented; `redis_counter` requires `REDIS_URL` and uses Postgres row lock as final arbiter after Redis fast-reject.
 
-## Kubernetes (local / CI)
+## Staging (free tier)
 
-See `deploy/k8s/README.md` — kind manifests for multi-replica API + worker; not used in production Render deploy.
+| Piece | Approach |
+| --- | --- |
+| Database | Neon branch named `staging` |
+| API / worker | Separate Render free services or preview Blueprint |
+| Frontend | Vercel Preview deployments |
+| BFF / notify | Separate Render free services from sibling repos |
+| Redis | Upstash free database (shared OK for portfolio) |
+
+Restore drill: Neon console → Branches → restore PITR to disposable branch, verify `/readyz` + seed.

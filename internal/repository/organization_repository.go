@@ -49,6 +49,21 @@ func (r *OrganizationRepository) List(ctx context.Context) ([]models.Organizatio
 	return list, err
 }
 
+func (r *OrganizationRepository) Search(ctx context.Context, q string, limit int) ([]models.Organization, error) {
+	if limit < 1 {
+		limit = 20
+	}
+	q = strings.TrimSpace(q)
+	var list []models.Organization
+	db := r.db.WithContext(ctx).Order("id ASC").Limit(limit)
+	if q != "" {
+		like := "%" + strings.ToLower(q) + "%"
+		db = db.Where("LOWER(name) LIKE ? OR LOWER(slug) LIKE ?", like, like)
+	}
+	err := db.Find(&list).Error
+	return list, err
+}
+
 func (r *OrganizationRepository) UpdateStatus(ctx context.Context, id uint, status string) error {
 	return r.db.WithContext(ctx).Model(&models.Organization{}).
 		Where("id = ?", id).
