@@ -32,7 +32,7 @@
 - [API reference](#api-reference)
 - [Testing](#testing)
 - [Deployment](#deployment)
-- [Roadmap](#roadmap)
+- [Capabilities](#capabilities)
 - [License](#license)
 
 ---
@@ -454,7 +454,7 @@ See [deploy/runbook.md](./deploy/runbook.md) for deploy, rollback, and observabi
 | Prometheus metrics, k6, kind (local) | Done |
 | Sibling Express BFF + notify services | Separate repos |
 
-See also: [deploy/staging.md](./deploy/staging.md), [deploy/runbook.md](./deploy/runbook.md), [deploy/incident.md](./deploy/incident.md).
+See also: [deploy/staging.md](./deploy/staging.md), [deploy/runbook.md](./deploy/runbook.md), [deploy/incident.md](./deploy/incident.md), [deploy/observability.md](./deploy/observability.md).
 
 ---
 

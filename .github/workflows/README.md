@@ -1,7 +1,5 @@
 # CI workflows
 
-| Workflow | Trigger | Jobs |
-| --- | --- | --- |
-| `ci.yml` | push + PR to `main` | lint · vet · test (race) · build |
+GitHub Actions for unit, integration, contract, and deploy jobs. Contract suite replays the frozen nine-endpoint B6A6 surface against Postgres.
 
-Contract tests are added to CI in Phase 0 step 11.
+See root `README.md` Testing / Deployment sections.
