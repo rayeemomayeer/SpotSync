@@ -90,6 +90,7 @@ func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p C
 			StartTime:      p.StartTime,
 			EndTime:        p.EndTime,
 			IdempotencyKey: p.IdempotencyKey,
+			OrganizationID: zone.OrganizationID,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return mapReservationWriteErr(err)
@@ -187,6 +188,7 @@ func (r *ReservationRepository) tryOptimisticCreate(ctx context.Context, p Creat
 			StartTime:      p.StartTime,
 			EndTime:        p.EndTime,
 			IdempotencyKey: p.IdempotencyKey,
+			OrganizationID: zone.OrganizationID,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return mapReservationWriteErr(err)

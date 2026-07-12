@@ -454,6 +454,8 @@ See [deploy/runbook.md](./deploy/runbook.md) for deploy, rollback, and observabi
 | Prometheus metrics, k6, kind (local) | Done |
 | Sibling Express BFF + notify services | Separate repos |
 
+Release tags: `v1.0.0-graded` … `v1.5.0-k8s` (see git tags).
+
 See also: [deploy/staging.md](./deploy/staging.md), [deploy/runbook.md](./deploy/runbook.md), [deploy/incident.md](./deploy/incident.md), [deploy/observability.md](./deploy/observability.md).
 
 ---
