@@ -85,6 +85,8 @@ jobs:
         env:
           DATABASE_URL: postgres://spotsync:spotsync@localhost:5432/spotsync?sslmode=disable
           JWT_SECRET: ci-test-secret
+          SEED_ADMIN_EMAIL: demo_admin@spotsync.com
+          SEED_ADMIN_PASSWORD: DemoAdminPass123!
         run: go run ./cmd/seed
 
       - name: Install k6
