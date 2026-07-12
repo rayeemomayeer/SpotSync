@@ -440,22 +440,21 @@ See [deploy/runbook.md](./deploy/runbook.md) for deploy, rollback, and observabi
 
 ---
 
-## Roadmap
+## Capabilities
 
-| Phase | Status | Notes |
-| --- | --- | --- |
-| **0 — Graded baseline** | Done | Nine frozen endpoints, contract tests, stampede proof |
-| **0.5 — Frontend-enablement** | Done | Pagination, filters, admin CRUD |
-| **0.6 — Bookable spots** | Done | `spot_id`, demo TTL, map coordinates in DB |
-| **1 — Event-driven** | Done | Outbox + worker (`cmd/worker`); deploy via `render.yaml` |
-| **2 — Real-time** | Done | SSE + Redis bridge; availability cache wired |
-| **3 — Distributed** | Done | `row_lock`, `optimistic`, `redis_counter` strategies; nginx in compose; Redis readiness |
-| **4 — Observability** | Done | Prometheus `/metrics`, k6 in CI, compose + Grafana guide |
-| **5 — Kubernetes** | Done (local) | kind scripts, in-cluster Postgres/Redis dev manifests, kind smoke in CI |
-| **F — Frontend** | Done | [Live Console](https://spotsync-nu.vercel.app) (separate repo) |
-| **6 — AI** | Deferred | Optional satellite |
+| Area | Status |
+| --- | --- |
+| Graded nine-endpoint contract + stampede proof | Done |
+| Transactional outbox + worker relay | Done |
+| SSE + Redis fan-out + availability cache | Done |
+| Capacity strategies (`row_lock`, `optimistic`, `redis_counter`) | Done |
+| Marketplace orgs / saas_admin / org_admin / driver | Done |
+| OpenAPI (`openapi.yaml`) + optional OTel | Done |
+| Notifications API + outbox dead-letter | Done |
+| Prometheus metrics, k6, kind (local) | Done |
+| Sibling Express BFF + notify services | Separate repos |
 
-Release tags: `v1.0.0-graded` … `v1.5.0-k8s` (see git tags).
+See also: [deploy/staging.md](./deploy/staging.md), [deploy/runbook.md](./deploy/runbook.md), [deploy/incident.md](./deploy/incident.md).
 
 ---
 
