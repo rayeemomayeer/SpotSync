@@ -57,9 +57,13 @@ DATABASE_URL="your-neon-url" go run ./cmd/seed
 | `reservation_latency_seconds` | `/metrics` (requires `Authorization: Bearer $METRICS_TOKEN` or `?token=` when set) |
 | `oversell_attempts_rejected_total` | `/metrics` |
 | `zone_availability_cache_hits_total` | `/metrics` (when Redis configured) |
+| OTLP traces | Set `OTEL_EXPORTER_OTLP_ENDPOINT` — see [observability.md](./observability.md) |
 | Local stack | `docker compose -f deploy/compose/docker-compose.yml up` + Prometheus on `:9090` |
+| Web Sentry stub | spotsync-web `NEXT_PUBLIC_SENTRY_DSN` (optional) |
 
 SSE zone streams require a JWT (`Authorization: Bearer` or `?access_token=`). Set `ALLOW_SELF_ADMIN_REGISTRATION=false` in production and seed admins. Set `METRICS_TOKEN` on Render. Worker + `REDIS_URL` (Upstash free) recommended for outbox relay and multi-replica SSE.
+
+Sibling Node services (BFF, notify) run outside this compose file — see [compose/README.md](./compose/README.md) and [staging.md](./staging.md).
 
 ## Load test (k6)
 

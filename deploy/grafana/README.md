@@ -1,4 +1,4 @@
-# Grafana dashboards (Phase 4)
+# Grafana dashboards
 
 SpotSync exposes Prometheus metrics at `GET /metrics`. Import or build dashboards from these series:
 
@@ -17,7 +17,7 @@ SpotSync exposes Prometheus metrics at `GET /metrics`. Import or build dashboard
 
 ## Production
 
-Scrape `https://spotsync-ei6g.onrender.com/metrics` from Grafana Cloud or self-hosted Prometheus (protect with network rules).
+Scrape `https://spotsync-ei6g.onrender.com/metrics` from Grafana Cloud or self-hosted Prometheus (protect with `METRICS_TOKEN`).
 
 Suggested panels:
 
@@ -25,4 +25,6 @@ Suggested panels:
 - **Oversell rejections** — `increase(oversell_attempts_rejected_total[1h])`
 - **Cache hit ratio** — `rate(zone_availability_cache_hits_total[5m]) / (rate(zone_availability_cache_hits_total[5m]) + rate(zone_availability_cache_misses_total[5m]))`
 
-OpenTelemetry tracing is deferred; logs + Prometheus cover the current production stack.
+## Tracing (OpenTelemetry)
+
+Set `OTEL_EXPORTER_OTLP_ENDPOINT` (e.g. Jaeger `http://localhost:4318`) to enable OTLP HTTP export from the Go API. See [slo.md](./slo.md) for SLI targets.
