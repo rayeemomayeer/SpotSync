@@ -1,5 +1,8 @@
 -- Marketplace tenancy: organizations, org-owned zones, expanded roles, audit, outbox DLQ.
 
+-- Legacy demo role (pre-marketplace) must map before the new CHECK.
+UPDATE users SET role = 'admin' WHERE role = 'demo_admin';
+
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
 ALTER TABLE users ADD CONSTRAINT users_role_check
   CHECK (role IN ('driver', 'admin', 'saas_admin', 'org_admin'));
