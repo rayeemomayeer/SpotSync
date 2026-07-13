@@ -151,7 +151,25 @@ func ensureUser(
 		return nil, err
 	}
 	if existing != nil {
-		log.Info("user already exists", "email", email, "role", existing.Role)
+		changed := false
+		if existing.Role != role {
+			existing.Role = role
+			changed = true
+		}
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcryptCost)
+		if err != nil {
+			return nil, err
+		}
+		existing.Password = string(hash)
+		changed = true
+		if changed {
+			if err := repo.Update(ctx, existing); err != nil {
+				return nil, fmt.Errorf("update seed user %s: %w", email, err)
+			}
+			log.Info("user refreshed from seed", "email", email, "role", role, "id", existing.ID)
+		} else {
+			log.Info("user already exists", "email", email, "role", existing.Role)
+		}
 		return existing, nil
 	}
 

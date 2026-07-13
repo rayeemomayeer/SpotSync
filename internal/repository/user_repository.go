@@ -49,6 +49,13 @@ func (r *UserRepository) FindByID(ctx context.Context, id uint) (*models.User, e
 	return &user, nil
 }
 
+func (r *UserRepository) Update(ctx context.Context, user *models.User) error {
+	if err := r.db.WithContext(ctx).Save(user).Error; err != nil {
+		return mapUserWriteErr(err)
+	}
+	return nil
+}
+
 func mapUserWriteErr(err error) error {
 	if errors.Is(err, gorm.ErrDuplicatedKey) {
 		return domain.ErrDuplicateEmail
