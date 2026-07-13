@@ -14,4 +14,5 @@ type ReservationEventPayload struct {
 	SpotID        *uint  `json:"spot_id,omitempty"`
 	UserID        uint   `json:"user_id"`
 	LicensePlate  string `json:"license_plate,omitempty"`
+	Email         string `json:"email,omitempty"`
 }

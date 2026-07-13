@@ -60,6 +60,13 @@ func (r *RedisClient) Publish(ctx context.Context, channel, eventType string, pa
 	return r.client.Publish(ctx, channel, msg).Err()
 }
 
+func (r *RedisClient) PublishRaw(ctx context.Context, channel string, payload []byte) error {
+	if r == nil || r.client == nil {
+		return nil
+	}
+	return r.client.Publish(ctx, channel, payload).Err()
+}
+
 func (r *RedisClient) PSubscribe(ctx context.Context, patterns ...string) *redis.PubSub {
 	if r == nil || r.client == nil {
 		return nil

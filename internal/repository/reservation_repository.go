@@ -101,6 +101,7 @@ func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p C
 			SpotID:        created.SpotID,
 			UserID:        created.UserID,
 			LicensePlate:  created.LicensePlate,
+			Email:         lookupUserEmail(tx, created.UserID),
 		}
 		return outbox.InsertReservationEvent(tx, r.outbox, domain.EventReservationCreated, payload)
 	})
@@ -210,6 +211,7 @@ func (r *ReservationRepository) tryOptimisticCreate(ctx context.Context, p Creat
 			SpotID:        created.SpotID,
 			UserID:        created.UserID,
 			LicensePlate:  created.LicensePlate,
+			Email:         lookupUserEmail(tx, created.UserID),
 		}
 		return outbox.InsertReservationEvent(tx, r.outbox, domain.EventReservationCreated, payload)
 	})
@@ -318,6 +320,7 @@ func (r *ReservationRepository) Cancel(ctx context.Context, reservationID, userI
 			SpotID:        res.SpotID,
 			UserID:        res.UserID,
 			LicensePlate:  res.LicensePlate,
+			Email:         lookupUserEmail(tx, res.UserID),
 		}
 		return outbox.InsertReservationEvent(tx, r.outbox, domain.EventReservationCancelled, payload)
 	})
@@ -426,4 +429,10 @@ func (r *ReservationRepository) HasActiveOnSpot(ctx context.Context, spotID uint
 		Where("spot_id = ? AND status = ?", spotID, models.ReservationStatusActive).
 		Count(&count).Error
 	return count > 0, err
+}
+
+func lookupUserEmail(tx *gorm.DB, userID uint) string {
+	var email string
+	_ = tx.Model(&models.User{}).Select("email").Where("id = ?", userID).Scan(&email)
+	return email
 }

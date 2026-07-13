@@ -43,6 +43,8 @@ type Config struct {
 	RedisURL                   string
 	CapacityStrategy           string
 	MetricsToken               string
+	// EmbedWorker runs outbox relay + expiry loops inside the API process.
+	EmbedWorker bool
 }
 
 // Load reads configuration from the environment and fails fast on missing required values.
@@ -145,6 +147,7 @@ func (c *Config) parseOptionalFields() error {
 	c.DatabaseMigrateURL = strings.TrimSpace(os.Getenv("DATABASE_MIGRATE_URL"))
 	c.CapacityStrategy = envOrDefault("CAPACITY_STRATEGY", "row_lock")
 	c.MetricsToken = strings.TrimSpace(os.Getenv("METRICS_TOKEN"))
+	c.EmbedWorker = parseBoolEnv("EMBED_WORKER", false)
 
 	return nil
 }

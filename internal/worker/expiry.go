@@ -67,9 +67,16 @@ func (e *ExpiryEngine) completeOne(ctx context.Context, res models.Reservation) 
 			SpotID:        locked.SpotID,
 			UserID:        locked.UserID,
 			LicensePlate:  locked.LicensePlate,
+			Email:         lookupUserEmail(tx, locked.UserID),
 		}
 		return outbox.InsertReservationEvent(tx, e.outbox, domain.EventReservationExpired, payload)
 	})
+}
+
+func lookupUserEmail(tx *gorm.DB, userID uint) string {
+	var email string
+	_ = tx.Model(&models.User{}).Select("email").Where("id = ?", userID).Scan(&email)
+	return email
 }
 
 func RunExpiryLoop(ctx context.Context, engine *ExpiryEngine, interval time.Duration, log *slog.Logger) {

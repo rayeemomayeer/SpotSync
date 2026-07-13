@@ -14,9 +14,11 @@ import (
 
 	"github.com/rayeemomayeer/SpotSync/internal/app"
 	"github.com/rayeemomayeer/SpotSync/internal/config"
+	"github.com/rayeemomayeer/SpotSync/internal/outbox"
 	"github.com/rayeemomayeer/SpotSync/internal/platform"
 	"github.com/rayeemomayeer/SpotSync/internal/realtime"
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
+	"github.com/rayeemomayeer/SpotSync/internal/worker"
 )
 
 func main() {
@@ -78,6 +80,21 @@ func run() error {
 		bridgeCtx, bridgeCancel := context.WithCancel(context.Background())
 		defer bridgeCancel()
 		go realtime.BridgeRedis(bridgeCtx, redisClient, hub, log)
+	}
+
+	workerCtx, workerCancel := context.WithCancel(context.Background())
+	defer workerCancel()
+	if cfg.EmbedWorker {
+		outboxRepo := outbox.NewRepository(db)
+		var publisher worker.EventPublisher = worker.NoopPublisher{}
+		if redisClient != nil {
+			publisher = worker.NewRedisPublisher(redisClient)
+		}
+		relay := worker.NewRelay(outboxRepo, publisher, log)
+		expiryEngine := worker.NewExpiryEngine(db, outboxRepo, log)
+		go worker.RunRelayLoop(workerCtx, relay, 2*time.Second, log)
+		go worker.RunExpiryLoop(workerCtx, expiryEngine, 30*time.Second, log)
+		log.Info("embedded outbox worker started")
 	}
 
 	addr := ":" + cfg.Port

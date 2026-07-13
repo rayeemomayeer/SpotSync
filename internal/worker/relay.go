@@ -9,7 +9,6 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
 	"github.com/rayeemomayeer/SpotSync/internal/outbox"
-	"github.com/rayeemomayeer/SpotSync/internal/platform"
 )
 
 const relayBatchSize = 50
@@ -88,19 +87,4 @@ type NoopPublisher struct{}
 
 func (NoopPublisher) PublishAvailability(context.Context, uint, string, []byte) error {
 	return nil
-}
-
-type RedisPublisher struct {
-	client *platform.RedisClient
-}
-
-func NewRedisPublisher(client *platform.RedisClient) *RedisPublisher {
-	return &RedisPublisher{client: client}
-}
-
-func (p *RedisPublisher) PublishAvailability(ctx context.Context, zoneID uint, eventType string, payload []byte) error {
-	if p.client == nil {
-		return nil
-	}
-	return p.client.Publish(ctx, platform.AvailabilityChannel(zoneID), eventType, payload)
 }
