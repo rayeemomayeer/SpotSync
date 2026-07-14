@@ -68,6 +68,28 @@ func (h *OrganizationHandler) Get(c echo.Context) error {
 	return JSONSuccess(c, http.StatusOK, "Organization retrieved", toOrgResponse(org))
 }
 
+func (h *OrganizationHandler) Me(c echo.Context) error {
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	if !appmw.IsOrgAdmin(c) && !appmw.IsPlatformAdmin(c) {
+		return domain.ErrForbidden
+	}
+	orgID, err := h.svc.PrimaryOrgID(c.Request().Context(), actorID)
+	if err != nil {
+		return err
+	}
+	if orgID == nil {
+		return domain.ErrNotFound
+	}
+	org, err := h.svc.Get(c.Request().Context(), *orgID)
+	if err != nil {
+		return err
+	}
+	return JSONSuccess(c, http.StatusOK, "Organization retrieved", toOrgResponse(org))
+}
+
 func (h *OrganizationHandler) SetStatus(c echo.Context) error {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
@@ -86,6 +108,38 @@ func (h *OrganizationHandler) SetStatus(c echo.Context) error {
 		return err
 	}
 	return JSONSuccess(c, http.StatusOK, "Organization updated", toOrgResponse(org))
+}
+
+func (h *OrganizationHandler) Approve(c echo.Context) error {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	org, err := h.svc.Approve(c.Request().Context(), actorID, id)
+	if err != nil {
+		return err
+	}
+	return JSONSuccess(c, http.StatusOK, "Organization approved", toOrgResponse(org))
+}
+
+func (h *OrganizationHandler) Reject(c echo.Context) error {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	org, err := h.svc.Reject(c.Request().Context(), actorID, id)
+	if err != nil {
+		return err
+	}
+	return JSONSuccess(c, http.StatusOK, "Organization rejected", toOrgResponse(org))
 }
 
 func (h *OrganizationHandler) ListAudit(c echo.Context) error {

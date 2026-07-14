@@ -26,7 +26,7 @@ func (s *OrganizationService) Create(ctx context.Context, actorID uint, name, sl
 	org := &models.Organization{
 		Name:   strings.TrimSpace(name),
 		Slug:   strings.ToLower(strings.TrimSpace(slug)),
-		Status: models.OrgStatusActive,
+		Status: models.OrgStatusPending,
 	}
 	if err := s.orgs.Create(ctx, org); err != nil {
 		return nil, err
@@ -59,6 +59,81 @@ func (s *OrganizationService) Get(ctx context.Context, id uint) (*models.Organiz
 		return nil, err
 	}
 	return org, nil
+}
+
+func (s *OrganizationService) Approve(ctx context.Context, actorID, orgID uint) (*models.Organization, error) {
+	org, err := s.orgs.GetByID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	if org.Status != models.OrgStatusPending {
+		return nil, domain.NewValidationError("Validation failed", map[string]string{
+			"status": "Only pending organizations can be approved",
+		})
+	}
+	if err := s.orgs.UpdateStatus(ctx, orgID, models.OrgStatusActive); err != nil {
+		return nil, err
+	}
+	org.Status = models.OrgStatusActive
+	_ = s.audit.Insert(ctx, &models.AuditLog{
+		ActorUserID:    &actorID,
+		OrganizationID: &orgID,
+		Action:         "organization.approve",
+		ResourceType:   "organization",
+		ResourceID:     &orgID,
+	})
+	return org, nil
+}
+
+func (s *OrganizationService) Reject(ctx context.Context, actorID, orgID uint) (*models.Organization, error) {
+	org, err := s.orgs.GetByID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	if org.Status != models.OrgStatusPending {
+		return nil, domain.NewValidationError("Validation failed", map[string]string{
+			"status": "Only pending organizations can be rejected",
+		})
+	}
+	if err := s.orgs.UpdateStatus(ctx, orgID, models.OrgStatusRejected); err != nil {
+		return nil, err
+	}
+	org.Status = models.OrgStatusRejected
+	_ = s.audit.Insert(ctx, &models.AuditLog{
+		ActorUserID:    &actorID,
+		OrganizationID: &orgID,
+		Action:         "organization.reject",
+		ResourceType:   "organization",
+		ResourceID:     &orgID,
+	})
+	return org, nil
+}
+
+func (s *OrganizationService) EnsureOrgEntitled(ctx context.Context, orgID uint) error {
+	org, err := s.orgs.GetByID(ctx, orgID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ErrNotFound
+		}
+		return err
+	}
+	if org.Status != models.OrgStatusActive {
+		return domain.ErrOrgNotEntitled
+	}
+	if org.BillingPlan == nil {
+		return domain.ErrOrgNotEntitled
+	}
+	plan := strings.TrimSpace(*org.BillingPlan)
+	if plan != "starter" && plan != "growth" {
+		return domain.ErrOrgNotEntitled
+	}
+	return nil
 }
 
 func (s *OrganizationService) SetStatus(ctx context.Context, actorID, orgID uint, status string) (*models.Organization, error) {

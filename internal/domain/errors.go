@@ -16,6 +16,7 @@ var (
 	ErrCapacityBelowActive       = errors.New("total capacity below active reservations")
 	ErrZoneHasActiveReservations = errors.New("zone has active reservations")
 	ErrRateLimited               = errors.New("rate limit exceeded")
+	ErrOrgNotEntitled            = errors.New("organization not entitled")
 )
 
 type ValidationError struct {

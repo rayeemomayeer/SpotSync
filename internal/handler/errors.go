@@ -56,6 +56,10 @@ func mapError(err error) (status int, message string, fieldErrors map[string]str
 		return http.StatusUnauthorized, "Unauthorized", fieldErrors
 	case errors.Is(err, domain.ErrForbidden), errors.Is(err, domain.ErrNotOwner):
 		return http.StatusForbidden, "Forbidden", fieldErrors
+	case errors.Is(err, domain.ErrOrgNotEntitled):
+		return http.StatusForbidden, "Organization not entitled", map[string]string{
+			"organization": "Active subscription required",
+		}
 	case errors.Is(err, domain.ErrZoneFull):
 		return http.StatusConflict, "Zone is full", fieldErrors
 	case errors.Is(err, domain.ErrSpotTaken):

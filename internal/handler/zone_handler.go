@@ -21,6 +21,7 @@ type ZoneService interface {
 
 type OrgResolver interface {
 	PrimaryOrgID(ctx context.Context, userID uint) (*uint, error)
+	EnsureOrgEntitled(ctx context.Context, orgID uint) error
 }
 
 type ZoneHandler struct {
@@ -50,6 +51,9 @@ func (h *ZoneHandler) Create(c echo.Context) error {
 			return domain.NewValidationError("Validation failed", map[string]string{
 				"organization": "Org admin must belong to an organization",
 			})
+		}
+		if err := h.orgs.EnsureOrgEntitled(c.Request().Context(), *id); err != nil {
+			return err
 		}
 		orgID = id
 	}
@@ -92,9 +96,39 @@ func (h *ZoneHandler) GetByID(c echo.Context) error {
 	return JSONSuccess(c, http.StatusOK, "Zone retrieved successfully", zone)
 }
 
+func (h *ZoneHandler) requireOrgEntitledForZone(c echo.Context, zoneID uint) error {
+	role := appmw.Role(c)
+	if role != models.RoleOrgAdmin || h.orgs == nil {
+		return nil
+	}
+	userID, _ := appmw.UserID(c)
+	orgID, err := h.orgs.PrimaryOrgID(c.Request().Context(), userID)
+	if err != nil {
+		return err
+	}
+	if orgID == nil {
+		return domain.ErrForbidden
+	}
+	if err := h.orgs.EnsureOrgEntitled(c.Request().Context(), *orgID); err != nil {
+		return err
+	}
+	zone, err := h.zones.GetByID(c.Request().Context(), zoneID)
+	if err != nil {
+		return err
+	}
+	if zone.OrganizationID == nil || *zone.OrganizationID != *orgID {
+		return domain.ErrForbidden
+	}
+	return nil
+}
+
 func (h *ZoneHandler) Update(c echo.Context) error {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
+		return err
+	}
+
+	if err := h.requireOrgEntitledForZone(c, id); err != nil {
 		return err
 	}
 
@@ -114,6 +148,10 @@ func (h *ZoneHandler) Update(c echo.Context) error {
 func (h *ZoneHandler) Delete(c echo.Context) error {
 	id, err := parseUintParam(c, "id")
 	if err != nil {
+		return err
+	}
+
+	if err := h.requireOrgEntitledForZone(c, id); err != nil {
 		return err
 	}
 

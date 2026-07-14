@@ -18,8 +18,10 @@ func (Organization) TableName() string {
 }
 
 const (
+	OrgStatusPending   = "pending"
 	OrgStatusActive    = "active"
 	OrgStatusSuspended = "suspended"
+	OrgStatusRejected  = "rejected"
 )
 
 type OrganizationMember struct {
