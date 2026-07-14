@@ -31,7 +31,9 @@ type ZoneAvailabilityRow struct {
 	AvailableSpots int `gorm:"column:available_spots"`
 }
 
-const availabilitySelect = `parking_zones.*, (
+const zoneColumns = `parking_zones.id, parking_zones.name, parking_zones.type, parking_zones.total_capacity, parking_zones.price_per_hour, parking_zones.organization_id, parking_zones.created_at, parking_zones.updated_at`
+
+const availabilitySelect = zoneColumns + `, (
 		total_capacity - (
 			SELECT COUNT(*) FROM reservations
 			WHERE zone_id = parking_zones.id AND status = 'active'

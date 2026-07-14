@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/dto"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
@@ -154,6 +156,9 @@ func (s *ReservationService) mapReservationsWithZones(ctx context.Context, list 
 		}
 		zone, err := s.zones.GetByIDWithAvailability(ctx, res.ZoneID)
 		if err != nil {
+			if errors.Is(err, domain.ErrNotFound) {
+				continue
+			}
 			return nil, err
 		}
 		zr := dto.ZoneFromModel(zone.ParkingZone, zone.AvailableSpots)
