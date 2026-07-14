@@ -10,6 +10,7 @@ var (
 	defaultAllowHeaders     = []string{
 		echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept,
 		echo.HeaderAuthorization, echo.HeaderXRequestID, "X-Demo-Reservation",
+		"X-Demo-Mode", "X-Demo-Session-Id",
 	}
 )
 

@@ -33,7 +33,7 @@ type ZoneAvailabilityRow struct {
 	AvailableSpots int `gorm:"column:available_spots"`
 }
 
-const zoneColumns = `parking_zones.id, parking_zones.name, parking_zones.type, parking_zones.total_capacity, parking_zones.price_per_hour, parking_zones.organization_id, parking_zones.created_at, parking_zones.updated_at`
+const zoneColumns = `parking_zones.id, parking_zones.name, parking_zones.type, parking_zones.total_capacity, parking_zones.price_per_hour, parking_zones.organization_id, parking_zones.is_demo, parking_zones.demo_session_id, parking_zones.created_at, parking_zones.updated_at`
 
 const availabilitySelect = zoneColumns + `, (
 		total_capacity - (

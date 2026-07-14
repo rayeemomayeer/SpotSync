@@ -174,3 +174,35 @@ func TestZoneService_ListPassesFilters(t *testing.T) {
 		t.Fatalf("zones=%+v", zones)
 	}
 }
+
+func TestZoneService_GetByIDScopedRequiresIsDemoFlag(t *testing.T) {
+	// Simulates SELECT omitting is_demo (zero value) — demo GET must not 404 for true demo rows.
+	svc := service.NewZoneService(&mockZoneStoreForZone{
+		getFn: func(_ context.Context, id uint) (*repository.ZoneAvailabilityRow, error) {
+			return &repository.ZoneAvailabilityRow{
+				ParkingZone:    models.ParkingZone{ID: id, Name: "Demo Lot", IsDemo: true},
+				AvailableSpots: 4,
+			}, nil
+		},
+	}, &mockSpotZoneManager{}, &mockZoneActiveCounter{}, nil)
+
+	zone, err := svc.GetByIDScoped(context.Background(), 4, true, "sess-1")
+	if err != nil {
+		t.Fatalf("demo zone visible: %v", err)
+	}
+	if zone.ID != 4 {
+		t.Fatalf("id=%d", zone.ID)
+	}
+
+	svcMissing := service.NewZoneService(&mockZoneStoreForZone{
+		getFn: func(_ context.Context, id uint) (*repository.ZoneAvailabilityRow, error) {
+			return &repository.ZoneAvailabilityRow{
+				ParkingZone: models.ParkingZone{ID: id, Name: "Missing flag"},
+			}, nil
+		},
+	}, &mockSpotZoneManager{}, &mockZoneActiveCounter{}, nil)
+	_, err = svcMissing.GetByIDScoped(context.Background(), 4, true, "sess-1")
+	if !errors.Is(err, domain.ErrNotFound) {
+		t.Fatalf("expected not found without is_demo, got %v", err)
+	}
+}
