@@ -40,6 +40,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	zoneRepo := repository.NewZoneRepository(db)
 	reservationRepo := repository.NewReservationRepository(db)
 	spotRepo := repository.NewSpotRepository(db)
+	paymentRepo := repository.NewPaymentRepository(db)
 
 	tokenManager := platform.NewTokenManager(cfg.JWTSecret, cfg.JWTExpiry)
 	authSvc := service.NewAuthService(userRepo, tokenManager, cfg.BcryptCost, cfg.AllowSelfAdminRegistration)
@@ -55,8 +56,9 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	if err != nil {
 		panic(err)
 	}
-	reservationSvc := service.NewReservationService(reservationRepo, capacityGuard, zoneRepo, cfg.DemoReservationTTL)
+	reservationSvc := service.NewReservationServiceWithPayments(reservationRepo, capacityGuard, zoneRepo, paymentRepo, cfg.DemoReservationTTL)
 	spotSvc := service.NewSpotService(spotRepo, reservationRepo)
+	paymentSvc := service.NewPaymentService(paymentRepo, reservationRepo)
 
 	orgRepo := repository.NewOrganizationRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
@@ -68,6 +70,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	spotHandler := handler.NewSpotHandler(spotSvc)
 	sseHandler := handler.NewSSEHandler(hub)
 	orgHandler := handler.NewOrganizationHandler(orgSvc)
+	paymentHandler := handler.NewPaymentHandler(paymentSvc)
 	notifRepo := repository.NewNotificationRepository(db)
 	notifHandler := handler.NewNotificationHandler(notifRepo)
 	outboxRepo := outbox.NewRepository(db)
@@ -148,6 +151,12 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	reservations.GET("/my-reservations", reservationHandler.ListMine)
 	reservations.DELETE("/:id", reservationHandler.Cancel)
 	reservations.GET("", reservationHandler.ListAll, requireAdmin)
+
+	payments := v1.Group("/payments", jwtAuth)
+	payments.POST("", paymentHandler.Create)
+	payments.GET("/mine", paymentHandler.ListMine)
+	payments.GET("/:id", paymentHandler.Get)
+	payments.POST("/:id/refunds", paymentHandler.Refund)
 
 	requirePlatform := appmw.RequirePlatformAdmin()
 	orgs := v1.Group("/orgs", jwtAuth)

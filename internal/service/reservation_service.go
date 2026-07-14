@@ -43,7 +43,12 @@ type ReservationService struct {
 	reservations ReservationStore
 	reserver     ReservationReserver
 	zones        ZoneStore
+	payments     PaymentLookup
 	demoTTL      time.Duration
+}
+
+type PaymentLookup interface {
+	ByReservationIDs(ctx context.Context, ids []uint) (map[uint]models.Payment, error)
 }
 
 func NewReservationService(reservations ReservationStore, reserver ReservationReserver, zones ZoneStore, demoTTL time.Duration) *ReservationService {
@@ -51,6 +56,18 @@ func NewReservationService(reservations ReservationStore, reserver ReservationRe
 		demoTTL = defaultDemoReservationTTL
 	}
 	return &ReservationService{reservations: reservations, reserver: reserver, zones: zones, demoTTL: demoTTL}
+}
+
+func NewReservationServiceWithPayments(
+	reservations ReservationStore,
+	reserver ReservationReserver,
+	zones ZoneStore,
+	payments PaymentLookup,
+	demoTTL time.Duration,
+) *ReservationService {
+	s := NewReservationService(reservations, reserver, zones, demoTTL)
+	s.payments = payments
+	return s
 }
 
 func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.CreateReservationRequest, opts CreateReservationOptions) (dto.ReservationResponse, error) {
@@ -145,8 +162,27 @@ func (s *ReservationService) mapReservationsWithZones(ctx context.Context, list 
 	out := make([]dto.ReservationResponse, len(list))
 	zoneCache := make(map[uint]dto.ZoneResponse)
 
+	var paymentByRes map[uint]models.Payment
+	if s.payments != nil && len(list) > 0 {
+		ids := make([]uint, 0, len(list))
+		for _, res := range list {
+			ids = append(ids, res.ID)
+		}
+		var err error
+		paymentByRes, err = s.payments.ByReservationIDs(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	for i, res := range list {
 		out[i] = dto.ReservationFromModel(res)
+		if p, ok := paymentByRes[res.ID]; ok {
+			status := p.Status
+			pid := p.ID
+			out[i].PaymentStatus = &status
+			out[i].PaymentID = &pid
+		}
 		if res.Zone.ID == 0 {
 			continue
 		}

@@ -11,17 +11,19 @@ type CreateReservationRequest struct {
 }
 
 type ReservationResponse struct {
-	ID           uint          `json:"id"`
-	UserID       uint          `json:"user_id"`
-	ZoneID       uint          `json:"zone_id"`
-	SpotID       *uint         `json:"spot_id,omitempty"`
-	LicensePlate string        `json:"license_plate"`
-	Status       string        `json:"status"`
-	CreatedAt    time.Time     `json:"created_at"`
-	UpdatedAt    time.Time     `json:"updated_at"`
-	Zone         *ZoneResponse `json:"zone,omitempty"`
-	User         *UserResponse `json:"user,omitempty"`
-	Spot         *SpotResponse `json:"spot,omitempty"`
+	ID            uint          `json:"id"`
+	UserID        uint          `json:"user_id"`
+	ZoneID        uint          `json:"zone_id"`
+	SpotID        *uint         `json:"spot_id,omitempty"`
+	LicensePlate  string        `json:"license_plate"`
+	Status        string        `json:"status"`
+	PaymentStatus *string       `json:"payment_status,omitempty"`
+	PaymentID     *uint         `json:"payment_id,omitempty"`
+	CreatedAt     time.Time     `json:"created_at"`
+	UpdatedAt     time.Time     `json:"updated_at"`
+	Zone          *ZoneResponse `json:"zone,omitempty"`
+	User          *UserResponse `json:"user,omitempty"`
+	Spot          *SpotResponse `json:"spot,omitempty"`
 }
 
 type PaginationQuery struct {
