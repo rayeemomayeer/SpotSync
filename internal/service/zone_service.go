@@ -64,6 +64,7 @@ func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest, org
 		TotalCapacity:  req.TotalCapacity,
 		PricePerHour:   req.PricePerHour,
 		OrganizationID: orgID,
+		DemoSessionID:  req.DemoSessionID,
 	}
 	if err := s.zones.Create(ctx, zone); err != nil {
 		return dto.ZoneResponse{}, err
@@ -84,10 +85,12 @@ func (s *ZoneService) Create(ctx context.Context, req dto.CreateZoneRequest, org
 
 func (s *ZoneService) List(ctx context.Context, q dto.ZoneListQuery) ([]dto.ZoneResponse, error) {
 	filter := repository.ZoneListFilter{
-		Type:  q.Type,
-		Query: q.Q,
-		Sort:  q.Sort,
-		Order: q.Order,
+		Type:          q.Type,
+		Query:         q.Q,
+		Sort:          q.Sort,
+		Order:         q.Order,
+		DemoMode:      q.DemoMode,
+		DemoSessionID: q.DemoSessionID,
 	}
 	rows, err := s.zones.ListWithAvailabilityFiltered(ctx, filter)
 	if err != nil {

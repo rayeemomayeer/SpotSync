@@ -16,6 +16,7 @@ type Reservation struct {
 	IdempotencyKey  *string    `gorm:"size:128;uniqueIndex:idx_reservations_idempotency_key"`
 	Version         int        `gorm:"not null;default:0"`
 	OrganizationID  *uint      `gorm:"index"`
+	DemoSessionID   *string    `gorm:"size:64;index"`
 	CreatedAt       time.Time  `gorm:"not null"`
 	UpdatedAt     time.Time  `gorm:"not null"`
 

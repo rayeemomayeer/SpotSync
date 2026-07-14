@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
@@ -58,6 +59,12 @@ func (h *ZoneHandler) Create(c echo.Context) error {
 		orgID = id
 	}
 
+	if appmw.IsDemoMode(c) {
+		if sid := strings.TrimSpace(appmw.DemoSessionID(c)); sid != "" {
+			req.DemoSessionID = &sid
+		}
+	}
+
 	zone, err := h.zones.Create(c.Request().Context(), req, orgID)
 	if err != nil {
 		return err
@@ -71,6 +78,8 @@ func (h *ZoneHandler) List(c echo.Context) error {
 	if err := BindAndValidate(c, &q); err != nil {
 		return err
 	}
+	q.DemoMode = appmw.IsDemoMode(c)
+	q.DemoSessionID = appmw.DemoSessionID(c)
 
 	zones, err := h.zones.List(c.Request().Context(), q)
 	if err != nil {

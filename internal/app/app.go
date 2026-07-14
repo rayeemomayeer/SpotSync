@@ -59,6 +59,8 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	reservationSvc := service.NewReservationServiceWithPayments(reservationRepo, capacityGuard, zoneRepo, paymentRepo, cfg.DemoReservationTTL)
 	spotSvc := service.NewSpotService(spotRepo, reservationRepo)
 	paymentSvc := service.NewPaymentService(paymentRepo, reservationRepo)
+	demoRepo := repository.NewDemoRepository(db)
+	demoSvc := service.NewDemoService(demoRepo)
 
 	orgRepo := repository.NewOrganizationRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
@@ -71,6 +73,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	sseHandler := handler.NewSSEHandler(hub)
 	orgHandler := handler.NewOrganizationHandler(orgSvc)
 	paymentHandler := handler.NewPaymentHandler(paymentSvc)
+	demoHandler := handler.NewDemoHandler(demoSvc)
 	notifRepo := repository.NewNotificationRepository(db)
 	notifHandler := handler.NewNotificationHandler(notifRepo)
 	outboxRepo := outbox.NewRepository(db)
@@ -110,6 +113,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 		e.Use(appmw.RequestLogger(log))
 	}
 	e.Use(appmw.CORS(cfg.CORSAllowedOrigins))
+	e.Use(appmw.DemoContext())
 
 	e.GET("/healthz", health.Healthz)
 	e.GET("/readyz", health.Readyz)
@@ -157,6 +161,8 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	payments.GET("/mine", paymentHandler.ListMine)
 	payments.GET("/:id", paymentHandler.Get)
 	payments.POST("/:id/refunds", paymentHandler.Refund)
+
+	v1.POST("/demo/reset", demoHandler.Reset, jwtAuth)
 
 	requirePlatform := appmw.RequirePlatformAdmin()
 	orgs := v1.Group("/orgs", jwtAuth)

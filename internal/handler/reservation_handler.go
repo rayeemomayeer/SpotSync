@@ -58,6 +58,11 @@ func (h *ReservationHandler) Create(c echo.Context) error {
 	if key := strings.TrimSpace(c.Request().Header.Get(idempotencyHeader)); key != "" {
 		opts.IdempotencyKey = &key
 	}
+	if middleware.IsDemoMode(c) {
+		if sid := strings.TrimSpace(middleware.DemoSessionID(c)); sid != "" {
+			opts.DemoSessionID = &sid
+		}
+	}
 
 	res, err := h.reservations.Create(c.Request().Context(), userID, req, opts)
 	if err != nil {

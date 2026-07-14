@@ -37,6 +37,7 @@ type ListAllResult struct {
 type CreateReservationOptions struct {
 	DemoReservation bool
 	IdempotencyKey  *string
+	DemoSessionID   *string
 }
 
 type ReservationService struct {
@@ -79,6 +80,7 @@ func (s *ReservationService) Create(ctx context.Context, userID uint, req dto.Cr
 		StartTime:      req.StartTime,
 		EndTime:        req.EndTime,
 		IdempotencyKey: opts.IdempotencyKey,
+		DemoSessionID:  opts.DemoSessionID,
 	}
 	if opts.DemoReservation {
 		expires := time.Now().Add(s.demoTTL)

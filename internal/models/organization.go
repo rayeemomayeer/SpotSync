@@ -7,6 +7,7 @@ type Organization struct {
 	Name             string    `gorm:"not null"`
 	Slug             string    `gorm:"uniqueIndex;not null"`
 	Status           string    `gorm:"not null;default:active"`
+	IsDemo           bool      `gorm:"not null;default:false"`
 	BillingPlan      *string   `gorm:"size:32"`
 	StripeCustomerID *string   `gorm:"size:255"`
 	CreatedAt        time.Time `gorm:"not null"`
@@ -44,6 +45,7 @@ type AuditLog struct {
 	ResourceType   string    `gorm:"not null"`
 	ResourceID     *uint
 	Metadata       []byte    `gorm:"type:jsonb;not null;default:'{}'"`
+	DemoSessionID  *string   `gorm:"size:64;index"`
 	CreatedAt      time.Time `gorm:"not null"`
 }
 

@@ -12,10 +12,12 @@ import (
 )
 
 type ZoneListFilter struct {
-	Type  string
-	Query string
-	Sort  string
-	Order string
+	Type          string
+	Query         string
+	Sort          string
+	Order         string
+	DemoMode      bool
+	DemoSessionID string
 }
 
 type ZoneRepository struct {
@@ -119,6 +121,15 @@ func (r *ZoneRepository) ListWithAvailabilityFiltered(ctx context.Context, f Zon
 			strings.TrimSpace(f.Query),
 			"%"+strings.TrimSpace(f.Query)+"%",
 		)
+	}
+
+	if f.DemoMode && strings.TrimSpace(f.DemoSessionID) != "" {
+		q = q.Where(
+			"(parking_zones.is_demo = true OR parking_zones.demo_session_id = ?)",
+			strings.TrimSpace(f.DemoSessionID),
+		)
+	} else {
+		q = q.Where("parking_zones.demo_session_id IS NULL")
 	}
 
 	order := buildZoneOrderClause(f.Sort, f.Order)

@@ -10,6 +10,8 @@ type ParkingZone struct {
 	TotalCapacity  int       `gorm:"not null"`
 	PricePerHour   float64   `gorm:"type:numeric(10,2);not null"`
 	OrganizationID *uint     `gorm:"index"`
+	IsDemo         bool      `gorm:"not null;default:false"`
+	DemoSessionID  *string   `gorm:"size:64;index"`
 	CreatedAt      time.Time `gorm:"not null"`
 	UpdatedAt      time.Time `gorm:"not null"`
 }

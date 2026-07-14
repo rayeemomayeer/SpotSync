@@ -24,6 +24,7 @@ type CreateReservationParams struct {
 	StartTime      *time.Time
 	EndTime        *time.Time
 	IdempotencyKey *string
+	DemoSessionID  *string
 }
 
 type ReservationRepository struct {
@@ -91,6 +92,7 @@ func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p C
 			EndTime:        p.EndTime,
 			IdempotencyKey: p.IdempotencyKey,
 			OrganizationID: zone.OrganizationID,
+			DemoSessionID:  p.DemoSessionID,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return mapReservationWriteErr(err)
@@ -190,6 +192,7 @@ func (r *ReservationRepository) tryOptimisticCreate(ctx context.Context, p Creat
 			EndTime:        p.EndTime,
 			IdempotencyKey: p.IdempotencyKey,
 			OrganizationID: zone.OrganizationID,
+			DemoSessionID:  p.DemoSessionID,
 		}
 		if err := tx.Create(&created).Error; err != nil {
 			return mapReservationWriteErr(err)
