@@ -100,6 +100,7 @@ func run() error {
 		"zones", len(zoneList),
 		"demo_driver_password", "DriverPass123!",
 		"demo_admin_password", "DemoAdminPass123!",
+		"hint", "set SEED_ADMIN_PASSWORD to AdminPass123! for portfolio Platform admin demo",
 	)
 	return nil
 }
