@@ -16,6 +16,8 @@ type ZoneService interface {
 	Create(ctx context.Context, req dto.CreateZoneRequest, orgID *uint) (dto.ZoneResponse, error)
 	List(ctx context.Context, q dto.ZoneListQuery) ([]dto.ZoneResponse, error)
 	GetByID(ctx context.Context, id uint) (dto.ZoneResponse, error)
+	GetByIDScoped(ctx context.Context, id uint, demoMode bool, demoSessionID string) (dto.ZoneResponse, error)
+	EnsureDemoWriteAccess(ctx context.Context, zoneID uint, demoMode bool, demoSessionID string) error
 	Update(ctx context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error)
 	Delete(ctx context.Context, id uint) error
 }
@@ -97,7 +99,7 @@ func (h *ZoneHandler) GetByID(c echo.Context) error {
 		return err
 	}
 
-	zone, err := h.zones.GetByID(c.Request().Context(), id)
+	zone, err := h.zones.GetByIDScoped(c.Request().Context(), id, appmw.IsDemoMode(c), appmw.DemoSessionID(c))
 	if err != nil {
 		return err
 	}
@@ -140,6 +142,9 @@ func (h *ZoneHandler) Update(c echo.Context) error {
 	if err := h.requireOrgEntitledForZone(c, id); err != nil {
 		return err
 	}
+	if err := h.zones.EnsureDemoWriteAccess(c.Request().Context(), id, appmw.IsDemoMode(c), appmw.DemoSessionID(c)); err != nil {
+		return err
+	}
 
 	var req dto.UpdateZoneRequest
 	if err := BindAndValidate(c, &req); err != nil {
@@ -161,6 +166,9 @@ func (h *ZoneHandler) Delete(c echo.Context) error {
 	}
 
 	if err := h.requireOrgEntitledForZone(c, id); err != nil {
+		return err
+	}
+	if err := h.zones.EnsureDemoWriteAccess(c.Request().Context(), id, appmw.IsDemoMode(c), appmw.DemoSessionID(c)); err != nil {
 		return err
 	}
 

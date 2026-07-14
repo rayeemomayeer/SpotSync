@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgconn"
@@ -63,6 +64,14 @@ func (r *ReservationRepository) CreateActiveWithOptions(ctx context.Context, p C
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return domain.ErrNotFound
 			}
+			return err
+		}
+
+		if p.DemoSessionID != nil && strings.TrimSpace(*p.DemoSessionID) != "" {
+			if err := domain.ValidateDemoZoneWrite(&zone, *p.DemoSessionID); err != nil {
+				return err
+			}
+		} else if err := domain.ValidateLiveZoneVisible(&zone); err != nil {
 			return err
 		}
 

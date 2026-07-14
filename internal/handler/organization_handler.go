@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,11 +15,16 @@ import (
 )
 
 type OrganizationHandler struct {
-	svc *service.OrganizationService
+	svc      *service.OrganizationService
+	notify   OrgEventPublisher
 }
 
-func NewOrganizationHandler(svc *service.OrganizationService) *OrganizationHandler {
-	return &OrganizationHandler{svc: svc}
+type OrgEventPublisher interface {
+	PublishOrgApproved(ctx context.Context, org *models.Organization, email string) error
+}
+
+func NewOrganizationHandler(svc *service.OrganizationService, notify OrgEventPublisher) *OrganizationHandler {
+	return &OrganizationHandler{svc: svc, notify: notify}
 }
 
 func (h *OrganizationHandler) Create(c echo.Context) error {
@@ -122,6 +128,10 @@ func (h *OrganizationHandler) Approve(c echo.Context) error {
 	org, err := h.svc.Approve(c.Request().Context(), actorID, id)
 	if err != nil {
 		return err
+	}
+	if h.notify != nil {
+		email := strings.TrimSpace(c.Request().Header.Get("X-Actor-Email"))
+		_ = h.notify.PublishOrgApproved(c.Request().Context(), org, email)
 	}
 	return JSONSuccess(c, http.StatusOK, "Organization approved", toOrgResponse(org))
 }

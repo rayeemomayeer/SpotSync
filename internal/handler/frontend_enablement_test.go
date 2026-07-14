@@ -36,6 +36,14 @@ func (s *stubZoneService) GetByID(context.Context, uint) (dto.ZoneResponse, erro
 	return dto.ZoneResponse{}, nil
 }
 
+func (s *stubZoneService) GetByIDScoped(_ context.Context, id uint, _ bool, _ string) (dto.ZoneResponse, error) {
+	return dto.ZoneResponse{ID: id}, nil
+}
+
+func (s *stubZoneService) EnsureDemoWriteAccess(context.Context, uint, bool, string) error {
+	return nil
+}
+
 func (s *stubZoneService) Update(ctx context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error) {
 	if s.updateFn != nil {
 		return s.updateFn(ctx, id, req)

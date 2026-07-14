@@ -101,8 +101,19 @@ func (s *ZoneService) List(ctx context.Context, q dto.ZoneListQuery) ([]dto.Zone
 }
 
 func (s *ZoneService) GetByID(ctx context.Context, id uint) (dto.ZoneResponse, error) {
+	return s.GetByIDScoped(ctx, id, false, "")
+}
+
+func (s *ZoneService) GetByIDScoped(ctx context.Context, id uint, demoMode bool, demoSessionID string) (dto.ZoneResponse, error) {
 	row, err := s.zones.GetByIDWithAvailability(ctx, id)
 	if err != nil {
+		return dto.ZoneResponse{}, err
+	}
+	if demoMode {
+		if err := domain.ValidateDemoZoneVisible(&row.ParkingZone, demoSessionID); err != nil {
+			return dto.ZoneResponse{}, err
+		}
+	} else if err := domain.ValidateLiveZoneVisible(&row.ParkingZone); err != nil {
 		return dto.ZoneResponse{}, err
 	}
 
@@ -118,6 +129,17 @@ func (s *ZoneService) GetByID(ctx context.Context, id uint) (dto.ZoneResponse, e
 	}
 
 	return dto.ZoneFromModel(row.ParkingZone, available), nil
+}
+
+func (s *ZoneService) EnsureDemoWriteAccess(ctx context.Context, zoneID uint, demoMode bool, demoSessionID string) error {
+	if !demoMode {
+		return nil
+	}
+	zone, err := s.zones.FindByID(ctx, zoneID)
+	if err != nil {
+		return err
+	}
+	return domain.ValidateDemoZoneWrite(zone, demoSessionID)
 }
 
 func (s *ZoneService) Update(ctx context.Context, id uint, req dto.UpdateZoneRequest) (dto.ZoneResponse, error) {

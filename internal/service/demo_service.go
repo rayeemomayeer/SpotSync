@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"time"
 
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
 )
@@ -16,4 +17,8 @@ func NewDemoService(demo *repository.DemoRepository) *DemoService {
 
 func (s *DemoService) ResetSession(ctx context.Context, sessionID string) (repository.DemoResetStats, error) {
 	return s.demo.ResetSession(ctx, sessionID)
+}
+
+func (s *DemoService) PurgeStaleSessions(ctx context.Context, inactiveBefore time.Time) (int, repository.DemoResetStats, error) {
+	return s.demo.PurgeStaleSessions(ctx, inactiveBefore)
 }

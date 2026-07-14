@@ -18,6 +18,7 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/realtime"
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
 	"github.com/rayeemomayeer/SpotSync/internal/service"
+	"github.com/rayeemomayeer/SpotSync/internal/worker"
 	"gorm.io/gorm"
 )
 
@@ -65,16 +66,20 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	orgRepo := repository.NewOrganizationRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
 	orgSvc := service.NewOrganizationService(orgRepo, auditRepo, userRepo)
+	notifRepo := repository.NewNotificationRepository(db)
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	zoneHandler := handler.NewZoneHandler(zoneSvc, orgSvc)
 	reservationHandler := handler.NewReservationHandler(reservationSvc, hub, zoneSvc)
 	spotHandler := handler.NewSpotHandler(spotSvc)
 	sseHandler := handler.NewSSEHandler(hub)
-	orgHandler := handler.NewOrganizationHandler(orgSvc)
+	var orgNotify handler.OrgEventPublisher
+	if opts.RedisClient != nil {
+		orgNotify = worker.NewRedisPublisher(opts.RedisClient, notifRepo)
+	}
+	orgHandler := handler.NewOrganizationHandler(orgSvc, orgNotify)
 	paymentHandler := handler.NewPaymentHandler(paymentSvc)
 	demoHandler := handler.NewDemoHandler(demoSvc)
-	notifRepo := repository.NewNotificationRepository(db)
 	notifHandler := handler.NewNotificationHandler(notifRepo)
 	outboxRepo := outbox.NewRepository(db)
 	outboxHandler := handler.NewOutboxHandler(outboxRepo)

@@ -86,9 +86,10 @@ func run() error {
 	defer workerCancel()
 	if cfg.EmbedWorker {
 		outboxRepo := outbox.NewRepository(db)
+		notifRepo := repository.NewNotificationRepository(db)
 		var publisher worker.EventPublisher = worker.NoopPublisher{}
 		if redisClient != nil {
-			publisher = worker.NewRedisPublisher(redisClient)
+			publisher = worker.NewRedisPublisher(redisClient, notifRepo)
 		}
 		relay := worker.NewRelay(outboxRepo, publisher, log)
 		expiryEngine := worker.NewExpiryEngine(db, outboxRepo, log)
