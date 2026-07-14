@@ -141,12 +141,7 @@ func buildZoneOrderClause(sort, order string) string {
 	case "price_per_hour":
 		return fmt.Sprintf("parking_zones.price_per_hour %s", dir)
 	case "available_spots":
-		return fmt.Sprintf(`(
-			total_capacity - (
-				SELECT COUNT(*) FROM reservations
-				WHERE zone_id = parking_zones.id AND status = 'active'
-			)
-		) %s`, dir)
+		return fmt.Sprintf("available_spots %s", dir)
 	default:
 		return "parking_zones.id ASC"
 	}
