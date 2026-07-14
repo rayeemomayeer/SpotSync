@@ -13,6 +13,7 @@ import (
 	"github.com/rayeemomayeer/SpotSync/internal/config"
 	"github.com/rayeemomayeer/SpotSync/internal/handler"
 	appmw "github.com/rayeemomayeer/SpotSync/internal/middleware"
+	"github.com/rayeemomayeer/SpotSync/internal/outbox"
 	"github.com/rayeemomayeer/SpotSync/internal/platform"
 	"github.com/rayeemomayeer/SpotSync/internal/realtime"
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
@@ -59,7 +60,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 
 	orgRepo := repository.NewOrganizationRepository(db)
 	auditRepo := repository.NewAuditRepository(db)
-	orgSvc := service.NewOrganizationService(orgRepo, auditRepo)
+	orgSvc := service.NewOrganizationService(orgRepo, auditRepo, userRepo)
 
 	authHandler := handler.NewAuthHandler(authSvc)
 	zoneHandler := handler.NewZoneHandler(zoneSvc, orgSvc)
@@ -69,6 +70,8 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	orgHandler := handler.NewOrganizationHandler(orgSvc)
 	notifRepo := repository.NewNotificationRepository(db)
 	notifHandler := handler.NewNotificationHandler(notifRepo)
+	outboxRepo := outbox.NewRepository(db)
+	outboxHandler := handler.NewOutboxHandler(outboxRepo)
 
 	readinessCheckers := []handler.ReadinessChecker{
 		&handler.DBReadinessChecker{
@@ -97,6 +100,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 
 	e.Use(echomw.Recover())
 	e.Use(appmw.RequestID())
+	e.Use(platform.TracingMiddleware("spotsync-api"))
 	e.Use(appmw.SecurityHeaders())
 	e.Use(platform.MetricsMiddleware())
 	if opts.EnableRequestLogger && log != nil {
@@ -106,6 +110,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 
 	e.GET("/healthz", health.Healthz)
 	e.GET("/readyz", health.Readyz)
+	e.GET("/openapi.yaml", handler.OpenAPIYAML)
 	e.GET("/metrics", echo.WrapHandler(promhttp.Handler()), appmw.MetricsAuth(cfg.MetricsToken))
 
 	jwtAuth := appmw.JWTAuth(tokenManager)
@@ -148,9 +153,17 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	orgs := v1.Group("/orgs", jwtAuth)
 	orgs.POST("", orgHandler.Create, requirePlatform)
 	orgs.GET("", orgHandler.List, requirePlatform)
+	orgs.GET("/audit", orgHandler.ListAudit, requireAdmin)
 	orgs.GET("/:id", orgHandler.Get, requireAdmin)
 	orgs.PATCH("/:id/status", orgHandler.SetStatus, requirePlatform)
-	orgs.GET("/audit", orgHandler.ListAudit, requireAdmin)
+	orgs.PATCH("/:id/plan", orgHandler.SetPlan, requirePlatform)
+	orgs.GET("/:id/members", orgHandler.ListMembers, requireAdmin)
+	orgs.POST("/:id/members", orgHandler.AssignMember, requireAdmin)
+	orgs.DELETE("/:id/members/:userId", orgHandler.RemoveMember, requireAdmin)
+
+	adminOps := v1.Group("/admin", jwtAuth, requirePlatform)
+	adminOps.GET("/outbox/dead-letter", outboxHandler.ListDeadLetter)
+	adminOps.POST("/outbox/dead-letter/:id/replay", outboxHandler.Replay)
 
 	notifs := v1.Group("/notifications", jwtAuth)
 	notifs.GET("", notifHandler.ListMine)

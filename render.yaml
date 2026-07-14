@@ -38,6 +38,12 @@ services:
         value: 10m
       - key: CAPACITY_STRATEGY
         value: row_lock
+      - key: EMBED_WORKER
+        value: "false"
+      - key: ENABLE_HSTS
+        value: "true"
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
 
   - type: worker
     name: spotsync-worker
@@ -59,3 +65,5 @@ services:
         value: "true"
       - key: LOG_LEVEL
         value: info
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false

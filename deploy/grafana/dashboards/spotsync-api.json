@@ -1,0 +1,70 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Reserve p95 latency",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(reservation_latency_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "title": "Oversell rejections / hr",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "increase(oversell_attempts_rejected_total[1h])",
+          "legendFormat": "409 conflicts"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "title": "Zone cache hit ratio",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "rate(zone_availability_cache_hits_total[5m]) / (rate(zone_availability_cache_hits_total[5m]) + rate(zone_availability_cache_misses_total[5m]))",
+          "legendFormat": "hit ratio"
+        }
+      ]
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "title": "Outbox dead letters",
+      "type": "timeseries",
+      "targets": [
+        {
+          "expr": "increase(outbox_dead_lettered_total[1h])",
+          "legendFormat": "DLQ"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["spotsync"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "SpotSync API",
+  "uid": "spotsync-api",
+  "version": 1
+}

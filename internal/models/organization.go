@@ -3,12 +3,14 @@ package models
 import "time"
 
 type Organization struct {
-	ID        uint      `gorm:"primaryKey"`
-	Name      string    `gorm:"not null"`
-	Slug      string    `gorm:"uniqueIndex;not null"`
-	Status    string    `gorm:"not null;default:active"`
-	CreatedAt time.Time `gorm:"not null"`
-	UpdatedAt time.Time `gorm:"not null"`
+	ID               uint      `gorm:"primaryKey"`
+	Name             string    `gorm:"not null"`
+	Slug             string    `gorm:"uniqueIndex;not null"`
+	Status           string    `gorm:"not null;default:active"`
+	BillingPlan      *string   `gorm:"size:32"`
+	StripeCustomerID *string   `gorm:"size:255"`
+	CreatedAt        time.Time `gorm:"not null"`
+	UpdatedAt        time.Time `gorm:"not null"`
 }
 
 func (Organization) TableName() string {

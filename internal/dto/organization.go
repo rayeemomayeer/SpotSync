@@ -8,12 +8,31 @@ type CreateOrganizationRequest struct {
 }
 
 type OrganizationResponse struct {
-	ID        uint      `json:"id"`
+	ID               uint      `json:"id"`
+	Name             string    `json:"name"`
+	Slug             string    `json:"slug"`
+	Status           string    `json:"status"`
+	BillingPlan      *string   `json:"billing_plan,omitempty"`
+	StripeCustomerID *string   `json:"stripe_customer_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type AssignOrgMemberRequest struct {
+	Email string `json:"email" validate:"required,email"`
+}
+
+type OrgMemberResponse struct {
+	UserID    uint      `json:"user_id"`
+	Email     string    `json:"email"`
 	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Status    string    `json:"status"`
+	Role      string    `json:"role"`
 	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type SetOrgPlanRequest struct {
+	Plan             string `json:"plan" validate:"required,oneof=starter growth"`
+	StripeCustomerID string `json:"stripe_customer_id,omitempty" validate:"omitempty,max=255"`
 }
 
 type SuspendOrganizationRequest struct {

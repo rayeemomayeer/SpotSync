@@ -125,13 +125,114 @@ func (h *OrganizationHandler) ListAudit(c echo.Context) error {
 	return JSONSuccess(c, http.StatusOK, "Audit logs retrieved", out)
 }
 
+func (h *OrganizationHandler) ListMembers(c echo.Context) error {
+	orgID, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	if !appmw.IsPlatformAdmin(c) {
+		if err := h.svc.EnsureOrgAccess(c.Request().Context(), models.RoleOrgAdmin, actorID, orgID); err != nil {
+			return err
+		}
+	}
+	list, err := h.svc.ListMembers(c.Request().Context(), orgID)
+	if err != nil {
+		return err
+	}
+	out := make([]dto.OrgMemberResponse, 0, len(list))
+	for _, m := range list {
+		out = append(out, dto.OrgMemberResponse{
+			UserID:    m.UserID,
+			Email:     m.Email,
+			Name:      m.Name,
+			Role:      m.Role,
+			CreatedAt: m.CreatedAt,
+		})
+	}
+	return JSONSuccess(c, http.StatusOK, "Organization members retrieved", out)
+}
+
+func (h *OrganizationHandler) AssignMember(c echo.Context) error {
+	orgID, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+	var req dto.AssignOrgMemberRequest
+	if err := BindAndValidate(c, &req); err != nil {
+		return err
+	}
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	if !appmw.IsPlatformAdmin(c) {
+		if err := h.svc.EnsureOrgAccess(c.Request().Context(), models.RoleOrgAdmin, actorID, orgID); err != nil {
+			return err
+		}
+	}
+	if err := h.svc.AssignOrgAdminByEmail(c.Request().Context(), actorID, orgID, req.Email); err != nil {
+		return err
+	}
+	return JSONSuccess(c, http.StatusCreated, "Organization admin assigned", nil)
+}
+
+func (h *OrganizationHandler) RemoveMember(c echo.Context) error {
+	orgID, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+	userID, err := parseUintParam(c, "userId")
+	if err != nil {
+		return err
+	}
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	if !appmw.IsPlatformAdmin(c) {
+		if err := h.svc.EnsureOrgAccess(c.Request().Context(), models.RoleOrgAdmin, actorID, orgID); err != nil {
+			return err
+		}
+	}
+	if err := h.svc.RemoveMember(c.Request().Context(), actorID, orgID, userID); err != nil {
+		return err
+	}
+	return JSONSuccess(c, http.StatusOK, "Organization member removed", nil)
+}
+
+func (h *OrganizationHandler) SetPlan(c echo.Context) error {
+	orgID, err := parseUintParam(c, "id")
+	if err != nil {
+		return err
+	}
+	var req dto.SetOrgPlanRequest
+	if err := BindAndValidate(c, &req); err != nil {
+		return err
+	}
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	org, err := h.svc.SetBillingPlan(c.Request().Context(), actorID, orgID, req.Plan, req.StripeCustomerID)
+	if err != nil {
+		return err
+	}
+	return JSONSuccess(c, http.StatusOK, "Organization billing plan updated", toOrgResponse(org))
+}
+
 func toOrgResponse(org *models.Organization) dto.OrganizationResponse {
 	return dto.OrganizationResponse{
-		ID:        org.ID,
-		Name:      org.Name,
-		Slug:      org.Slug,
-		Status:    org.Status,
-		CreatedAt: org.CreatedAt,
-		UpdatedAt: org.UpdatedAt,
+		ID:               org.ID,
+		Name:             org.Name,
+		Slug:             org.Slug,
+		Status:           org.Status,
+		BillingPlan:      org.BillingPlan,
+		StripeCustomerID: org.StripeCustomerID,
+		CreatedAt:        org.CreatedAt,
+		UpdatedAt:        org.UpdatedAt,
 	}
 }

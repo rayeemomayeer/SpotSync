@@ -32,6 +32,15 @@ func run() error {
 	log := platform.NewLogger(cfg.LogLevel)
 	slog.SetDefault(log)
 
+	ctxRoot := context.Background()
+	shutdownTracer, err := platform.InitTracer(ctxRoot, "spotsync-worker", log)
+	if err != nil {
+		return fmt.Errorf("init tracer: %w", err)
+	}
+	defer func() {
+		_ = shutdownTracer(context.Background())
+	}()
+
 	db, err := platform.OpenPostgres(cfg, log)
 	if err != nil {
 		return fmt.Errorf("connect database: %w", err)

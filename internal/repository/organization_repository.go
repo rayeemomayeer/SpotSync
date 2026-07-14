@@ -70,6 +70,51 @@ func (r *OrganizationRepository) UpdateStatus(ctx context.Context, id uint, stat
 		Updates(map[string]any{"status": status, "updated_at": time.Now()}).Error
 }
 
+func (r *OrganizationRepository) UpdateBillingPlan(ctx context.Context, id uint, plan string, stripeCustomerID *string) error {
+	updates := map[string]any{
+		"billing_plan": plan,
+		"updated_at":   time.Now(),
+	}
+	if stripeCustomerID != nil {
+		updates["stripe_customer_id"] = *stripeCustomerID
+	}
+	return r.db.WithContext(ctx).Model(&models.Organization{}).
+		Where("id = ?", id).
+		Updates(updates).Error
+}
+
+type OrgMemberView struct {
+	UserID    uint
+	Email     string
+	Name      string
+	Role      string
+	CreatedAt time.Time
+}
+
+func (r *OrganizationRepository) ListMembers(ctx context.Context, orgID uint) ([]OrgMemberView, error) {
+	var rows []OrgMemberView
+	err := r.db.WithContext(ctx).Table("organization_members m").
+		Select("m.user_id, u.email, u.name, m.role, m.created_at").
+		Joins("JOIN users u ON u.id = m.user_id").
+		Where("m.organization_id = ?", orgID).
+		Order("m.id ASC").
+		Scan(&rows).Error
+	return rows, err
+}
+
+func (r *OrganizationRepository) RemoveMember(ctx context.Context, orgID, userID uint) error {
+	res := r.db.WithContext(ctx).
+		Where("organization_id = ? AND user_id = ?", orgID, userID).
+		Delete(&models.OrganizationMember{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
 func (r *OrganizationRepository) AddMember(ctx context.Context, member *models.OrganizationMember) error {
 	member.CreatedAt = time.Now()
 	return r.db.WithContext(ctx).Create(member).Error

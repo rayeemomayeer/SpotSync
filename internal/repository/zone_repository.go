@@ -112,8 +112,11 @@ func (r *ZoneRepository) ListWithAvailabilityFiltered(ctx context.Context, f Zon
 		q = q.Where("parking_zones.type = ?", f.Type)
 	}
 	if strings.TrimSpace(f.Query) != "" {
-		pattern := "%" + strings.TrimSpace(f.Query) + "%"
-		q = q.Where("parking_zones.name ILIKE ?", pattern)
+		q = q.Where(
+			"parking_zones.search_vector @@ plainto_tsquery('english', ?) OR parking_zones.name ILIKE ?",
+			strings.TrimSpace(f.Query),
+			"%"+strings.TrimSpace(f.Query)+"%",
+		)
 	}
 
 	order := buildZoneOrderClause(f.Sort, f.Order)

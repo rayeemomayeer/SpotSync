@@ -30,6 +30,11 @@ var (
 		Name: "zone_availability_cache_misses_total",
 		Help: "Zone availability cache misses on GET /zones/:id",
 	})
+
+	outboxDeadLettered = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "outbox_dead_lettered_total",
+		Help: "Outbox events moved to dead-letter queue",
+	})
 )
 
 func MetricsMiddleware() echo.MiddlewareFunc {
@@ -60,4 +65,8 @@ func RecordZoneAvailCacheHit() {
 
 func RecordZoneAvailCacheMiss() {
 	zoneAvailCacheMisses.Inc()
+}
+
+func RecordOutboxDeadLetter() {
+	outboxDeadLettered.Inc()
 }

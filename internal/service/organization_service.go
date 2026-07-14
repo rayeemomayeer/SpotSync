@@ -15,10 +15,11 @@ import (
 type OrganizationService struct {
 	orgs  *repository.OrganizationRepository
 	audit *repository.AuditRepository
+	users *repository.UserRepository
 }
 
-func NewOrganizationService(orgs *repository.OrganizationRepository, audit *repository.AuditRepository) *OrganizationService {
-	return &OrganizationService{orgs: orgs, audit: audit}
+func NewOrganizationService(orgs *repository.OrganizationRepository, audit *repository.AuditRepository, users *repository.UserRepository) *OrganizationService {
+	return &OrganizationService{orgs: orgs, audit: audit, users: users}
 }
 
 func (s *OrganizationService) Create(ctx context.Context, actorID uint, name, slug string) (*models.Organization, error) {
@@ -83,6 +84,12 @@ func (s *OrganizationService) SetStatus(ctx context.Context, actorID, orgID uint
 }
 
 func (s *OrganizationService) AssignOrgAdmin(ctx context.Context, actorID, orgID, userID uint) error {
+	if _, err := s.orgs.GetByID(ctx, orgID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ErrNotFound
+		}
+		return err
+	}
 	member := &models.OrganizationMember{
 		OrganizationID: orgID,
 		UserID:         userID,
@@ -99,6 +106,74 @@ func (s *OrganizationService) AssignOrgAdmin(ctx context.Context, actorID, orgID
 		ResourceID:     &userID,
 	})
 	return nil
+}
+
+func (s *OrganizationService) AssignOrgAdminByEmail(ctx context.Context, actorID, orgID uint, email string) error {
+	user, err := s.users.FindByEmail(ctx, email)
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return domain.ErrNotFound
+	}
+	return s.AssignOrgAdmin(ctx, actorID, orgID, user.ID)
+}
+
+func (s *OrganizationService) ListMembers(ctx context.Context, orgID uint) ([]repository.OrgMemberView, error) {
+	if _, err := s.orgs.GetByID(ctx, orgID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, domain.ErrNotFound
+		}
+		return nil, err
+	}
+	return s.orgs.ListMembers(ctx, orgID)
+}
+
+func (s *OrganizationService) RemoveMember(ctx context.Context, actorID, orgID, userID uint) error {
+	if err := s.orgs.RemoveMember(ctx, orgID, userID); err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return domain.ErrNotFound
+		}
+		return err
+	}
+	_ = s.audit.Insert(ctx, &models.AuditLog{
+		ActorUserID:    &actorID,
+		OrganizationID: &orgID,
+		Action:         "organization.remove_member",
+		ResourceType:   "user",
+		ResourceID:     &userID,
+	})
+	return nil
+}
+
+func (s *OrganizationService) SetBillingPlan(ctx context.Context, actorID, orgID uint, plan, stripeCustomerID string) (*models.Organization, error) {
+	if plan != "starter" && plan != "growth" {
+		return nil, domain.NewValidationError("Validation failed", map[string]string{"plan": "Must be starter or growth"})
+	}
+	if err := s.orgs.UpdateBillingPlan(ctx, orgID, plan, optionalString(stripeCustomerID)); err != nil {
+		return nil, err
+	}
+	org, err := s.orgs.GetByID(ctx, orgID)
+	if err != nil {
+		return nil, err
+	}
+	_ = s.audit.Insert(ctx, &models.AuditLog{
+		ActorUserID:    &actorID,
+		OrganizationID: &orgID,
+		Action:         "organization.billing_plan",
+		ResourceType:   "organization",
+		ResourceID:     &orgID,
+		Metadata:       mustJSON(map[string]string{"plan": plan}),
+	})
+	return org, nil
+}
+
+func optionalString(v string) *string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	return &v
 }
 
 func (s *OrganizationService) ListAudit(ctx context.Context, orgID *uint, limit int) ([]models.AuditLog, error) {
