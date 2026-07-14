@@ -222,10 +222,11 @@ func (s *OrganizationService) RemoveMember(ctx context.Context, actorID, orgID, 
 }
 
 func (s *OrganizationService) SetBillingPlan(ctx context.Context, actorID, orgID uint, plan, stripeCustomerID string) (*models.Organization, error) {
-	if plan != "starter" && plan != "growth" {
-		return nil, domain.NewValidationError("Validation failed", map[string]string{"plan": "Must be starter or growth"})
+	if plan != "starter" && plan != "growth" && plan != "none" {
+		return nil, domain.NewValidationError("Validation failed", map[string]string{"plan": "Must be starter, growth, or none"})
 	}
-	if err := s.orgs.UpdateBillingPlan(ctx, orgID, plan, optionalString(stripeCustomerID)); err != nil {
+	clear := plan == "none"
+	if err := s.orgs.UpdateBillingPlan(ctx, orgID, plan, optionalString(stripeCustomerID), clear); err != nil {
 		return nil, err
 	}
 	org, err := s.orgs.GetByID(ctx, orgID)

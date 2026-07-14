@@ -70,10 +70,15 @@ func (r *OrganizationRepository) UpdateStatus(ctx context.Context, id uint, stat
 		Updates(map[string]any{"status": status, "updated_at": time.Now()}).Error
 }
 
-func (r *OrganizationRepository) UpdateBillingPlan(ctx context.Context, id uint, plan string, stripeCustomerID *string) error {
+func (r *OrganizationRepository) UpdateBillingPlan(ctx context.Context, id uint, plan string, stripeCustomerID *string, clear bool) error {
 	updates := map[string]any{
-		"billing_plan": plan,
-		"updated_at":   time.Now(),
+		"updated_at": time.Now(),
+	}
+	if clear {
+		// GORM Updates skips naked nil; Expr forces SQL NULL.
+		updates["billing_plan"] = gorm.Expr("NULL")
+	} else {
+		updates["billing_plan"] = plan
 	}
 	if stripeCustomerID != nil {
 		updates["stripe_customer_id"] = *stripeCustomerID

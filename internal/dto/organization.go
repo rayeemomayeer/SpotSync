@@ -31,7 +31,7 @@ type OrgMemberResponse struct {
 }
 
 type SetOrgPlanRequest struct {
-	Plan             string `json:"plan" validate:"required,oneof=starter growth"`
+	Plan             string `json:"plan" validate:"required,oneof=starter growth none"`
 	StripeCustomerID string `json:"stripe_customer_id,omitempty" validate:"omitempty,max=255"`
 }
 
