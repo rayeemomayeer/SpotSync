@@ -204,6 +204,15 @@ paths:
       responses:
         "201":
           description: Created
+  /api/v1/orgs/apply:
+    post:
+      summary: Self-apply for an organization (authenticated driver)
+      description: Creates a pending org, attaches the caller as org_admin, and promotes role. Requires platform approval before zone publish.
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Application submitted (status pending)
   /api/v1/orgs/{id}:
     get:
       summary: Get organization

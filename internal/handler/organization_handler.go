@@ -43,6 +43,22 @@ func (h *OrganizationHandler) Create(c echo.Context) error {
 	return JSONSuccess(c, http.StatusCreated, "Organization created", toOrgResponse(org))
 }
 
+func (h *OrganizationHandler) Apply(c echo.Context) error {
+	var req dto.CreateOrganizationRequest
+	if err := BindAndValidate(c, &req); err != nil {
+		return err
+	}
+	actorID, ok := appmw.UserID(c)
+	if !ok {
+		return domain.ErrUnauthorized
+	}
+	org, err := h.svc.Apply(c.Request().Context(), actorID, req.Name, req.Slug)
+	if err != nil {
+		return err
+	}
+	return JSONSuccess(c, http.StatusCreated, "Organization application submitted", toOrgResponse(org))
+}
+
 func (h *OrganizationHandler) List(c echo.Context) error {
 	q := strings.TrimSpace(c.QueryParam("q"))
 	var list []models.Organization

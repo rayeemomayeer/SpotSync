@@ -172,6 +172,7 @@ func NewEcho(cfg *config.Config, db *gorm.DB, log *slog.Logger, opts Options) (*
 	requirePlatform := appmw.RequirePlatformAdmin()
 	orgs := v1.Group("/orgs", jwtAuth)
 	orgs.GET("/me", orgHandler.Me)
+	orgs.POST("/apply", orgHandler.Apply)
 	orgs.POST("", orgHandler.Create, requirePlatform)
 	orgs.GET("", orgHandler.List, requirePlatform)
 	orgs.GET("/audit", orgHandler.ListAudit, requireAdmin)

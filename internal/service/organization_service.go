@@ -6,6 +6,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rayeemomayeer/SpotSync/internal/domain"
 	"github.com/rayeemomayeer/SpotSync/internal/models"
 	"github.com/rayeemomayeer/SpotSync/internal/repository"
@@ -29,7 +30,7 @@ func (s *OrganizationService) Create(ctx context.Context, actorID uint, name, sl
 		Status: models.OrgStatusPending,
 	}
 	if err := s.orgs.Create(ctx, org); err != nil {
-		return nil, err
+		return nil, mapOrgWriteErr(err)
 	}
 	_ = s.audit.Insert(ctx, &models.AuditLog{
 		ActorUserID:    &actorID,
@@ -40,6 +41,62 @@ func (s *OrganizationService) Create(ctx context.Context, actorID uint, name, sl
 		Metadata:       mustJSON(map[string]string{"slug": org.Slug}),
 	})
 	return org, nil
+}
+
+// Apply lets a driver self-register an organization (pending platform approval).
+// Attaches the actor as org_admin member and promotes users.role when needed.
+func (s *OrganizationService) Apply(ctx context.Context, actorID uint, name, slug string) (*models.Organization, error) {
+	user, err := s.users.FindByID(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, domain.ErrUnauthorized
+	}
+	if user.Role == models.RoleAdmin || user.Role == models.RoleSaaSAdmin {
+		return nil, domain.NewValidationError("Validation failed", map[string]string{
+			"role": "Platform admins create orgs via POST /orgs",
+		})
+	}
+
+	existingID, err := s.PrimaryOrgID(ctx, actorID)
+	if err != nil {
+		return nil, err
+	}
+	if existingID != nil {
+		return nil, domain.NewValidationError("Validation failed", map[string]string{
+			"organization": "Already a member of an organization",
+		})
+	}
+
+	org, err := s.Create(ctx, actorID, name, slug)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.AssignOrgAdmin(ctx, actorID, org.ID, actorID); err != nil {
+		return nil, err
+	}
+	if user.Role == models.RoleDriver {
+		user.Role = models.RoleOrgAdmin
+		if err := s.users.Update(ctx, user); err != nil {
+			return nil, err
+		}
+	}
+	return org, nil
+}
+
+func mapOrgWriteErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, gorm.ErrDuplicatedKey) {
+		return domain.NewValidationError("Validation failed", map[string]string{"slug": "Slug already taken"})
+	}
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		return domain.NewValidationError("Validation failed", map[string]string{"slug": "Slug already taken"})
+	}
+	return err
 }
 
 func (s *OrganizationService) List(ctx context.Context) ([]models.Organization, error) {
