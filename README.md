@@ -1,31 +1,32 @@
 ﻿# SpotSync
 
-> A high-concurrency reservation engine for finite parking and EV charging resources — built to **never oversell** a zone under contention.
+> A **high-concurrency reservation engine** for finite parking and EV-charging resources — built in Go to **never oversell** a zone, even when hundreds of requests race for the last spot at the same instant.
 
 [![Go](https://img.shields.io/badge/Go-1.25%2B-00ADD8?logo=go&logoColor=white)](https://go.dev)
+[![Echo](https://img.shields.io/badge/Echo-v4-1E90FF)](https://echo.labstack.com)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-4169E1?logo=postgresql&logoColor=white)](https://neon.tech)
+[![Deployed on Render](https://img.shields.io/badge/Render-live-46E3B7?logo=render&logoColor=white)](https://spotsync-ei6g.onrender.com/healthz)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
 
-## Quick links
+**Live API → [spotsync-ei6g.onrender.com](https://spotsync-ei6g.onrender.com/healthz)** · **Live product → [spotsync-nu.vercel.app](https://spotsync-nu.vercel.app)**
 
-| | |
-| --- | --- |
-| **Live API** | https://spotsync-ei6g.onrender.com |
-| **API base** | https://spotsync-ei6g.onrender.com/api/v1 |
-| **Live frontend** | https://spotsync-nu.vercel.app |
-| **This repo** | https://github.com/rayeemomayeer/SpotSync |
-| **Frontend repo** | https://github.com/rayeemomayeer/spotsync-web |
+```bash
+curl https://spotsync-ei6g.onrender.com/healthz   # → {"status":"ok"}
+```
 
-**Health:** `curl https://spotsync-ei6g.onrender.com/healthz` → `{"status":"ok"}`
+> Free-tier Render sleeps after inactivity — the first request may take ~30 s to wake the service.
 
 ---
 
 ## Table of contents
 
-- [Why SpotSync](#why-spotsync)
+- [What is SpotSync? (non-technical)](#what-is-spotsync-non-technical)
+- [The live product](#the-live-product)
+- [The SpotSync stack](#the-spotsync-stack)
+- [The core engineering problem](#the-core-engineering-problem)
 - [Features](#features)
 - [Tech stack](#tech-stack)
 - [Architecture](#architecture)
-- [The concurrency problem](#the-concurrency-problem)
 - [Project structure](#project-structure)
 - [Getting started](#getting-started)
 - [Configuration](#configuration)
@@ -37,28 +38,73 @@
 
 ---
 
-## Why SpotSync
+## What is SpotSync? (non-technical)
 
-Parking and EV charging are **finite-capacity** resources in **high demand**. When many drivers race for the last EV spot at the same instant, a naive implementation lets two of them win — the zone ends up over capacity.
+Imagine a parking garage with exactly **one** EV-charging spot left, and **fifty** drivers tapping "Book now" at the same second. A naively built system tells several of them "you got it" — and now the garage has promised one spot to many cars.
 
-SpotSync treats that race as the central engineering problem. The reservation path is transactional and serializable per zone, so the capacity invariant — *active reservations ≤ total capacity* — holds no matter how many requests arrive concurrently.
+SpotSync is the backend service that makes that impossible. It is the **source of truth for parking inventory**: it registers users, lets operators publish garages ("zones"), and processes every booking through a path that is mathematically guaranteed to respect capacity. Whatever the traffic, *active reservations never exceed total spots* — this is proven by automated stress tests, not just assumed.
+
+On top of that core, SpotSync powers a full marketplace: organizations apply and get approved, drivers pay before they reserve, availability streams to browsers in real time, and admins monitor everything through health and metrics endpoints.
+
+---
+
+## The live product
+
+This engine powers a complete parking marketplace you can use right now at **[spotsync-nu.vercel.app](https://spotsync-nu.vercel.app)** — demo personas, Stripe test checkout, and a sandboxed demo mode are all available from the landing page.
+
+**Landing page** — live marketplace stats fed by this API:
+
+![SpotSync landing page](./assets/spotsync-landing.png)
+
+**Driver map** — per-stall booking grid; occupancy comes from `GET /zones/:id/spots`:
+
+![Driver map with spot grid](./assets/spotsync-driver.png)
+
+**Live operations console** — three columns kept in sync by this engine's SSE stream:
+
+![Live operations console](./assets/spotsync-console.png)
+
+---
+
+## The SpotSync stack
+
+SpotSync is a four-service system. This repo is the reservation engine; the other services live in sibling repos:
+
+| Service | Role | Repository | Live URL |
+| --- | --- | --- | --- |
+| **Go API** (this repo) | Reservation engine — auth, zones, capacity invariant, SSE | [SpotSync](https://github.com/rayeemomayeer/SpotSync) | [spotsync-ei6g.onrender.com](https://spotsync-ei6g.onrender.com/healthz) |
+| **Web** | Next.js UI for drivers, orgs, platform admins | [spotsync-web](https://github.com/rayeemomayeer/spotsync-web) | [spotsync-nu.vercel.app](https://spotsync-nu.vercel.app) |
+| **BFF** | Express gateway — Better Auth sessions, Stripe checkout, API proxy | [spotsync-bff](https://github.com/rayeemomayeer/spotsync-bff) | [spotsync-bff.onrender.com](https://spotsync-bff.onrender.com/healthz) |
+| **Notify** | Email receipts & auth mail via Resend | [spotsync-notify](https://github.com/rayeemomayeer/spotsync-notify) | internal (Render) |
+
+---
+
+## The core engineering problem
+
+If `total_capacity` is 1 and one reservation is active, the next request must be rejected. But two *simultaneous* requests can both read "0 active" and both succeed — unless the check-and-insert is serialized.
+
+SpotSync's reservation path opens a database transaction, locks the zone row (`SELECT … FOR UPDATE`), counts active reservations, and inserts only when `active < total_capacity`. Concurrent reservers for the same zone queue behind the lock; the loser of the race gets a clean `409 Conflict`.
+
+This is not asserted — it is **proven**: a stampede test fires 50 concurrent goroutines at a 1-capacity zone and requires exactly one success. Per-stall races (30 workers targeting one `spot_id`) are covered the same way. Three interchangeable capacity strategies exist (`row_lock`, `optimistic`, `redis_counter`) so the trade-offs can be benchmarked under load.
 
 ---
 
 ## Features
 
-- **JWT authentication** with bcrypt-hashed passwords (registration + login).
-- **Role-based access control** — `driver` and `admin` roles enforced via middleware.
+- **JWT authentication** — registration + login with bcrypt-hashed passwords (cost 12).
+- **Role-based access control** — `driver` and `admin` roles enforced via middleware; marketplace adds `org_admin` and `saas_admin`.
 - **Parking zone management** — admins create zones (`general`, `ev_charging`, `covered`) with capacity and hourly pricing.
-- **Dynamic availability** — `available_spots = total_capacity − active reservations`, computed on every read.
-- **Concurrency-safe reservations** — database transaction + `SELECT … FOR UPDATE` on the zone row; over-capacity bookings return `409 Conflict`.
-- **Bookable parking spots** — per-zone spots with map coordinates (`pos_x`/`pos_y`); optional `spot_id` on reserve; partial unique index prevents two active bookings on the same stall.
-- **Demo reservation TTL** — `X-Demo-Reservation: true` auto-expires showcase bookings; lazy cleanup on spot list and my-reservations reads.
-- **Ownership-scoped actions** — drivers cancel only their own reservations; admins list all reservations.
-- **Consistent API contract** — `{success, message, data}` / `{success, message, errors}` envelope on every response.
-- **Operational endpoints** — `/healthz`, `/readyz`, `/metrics`, structured request logging, CORS, auth rate limiting.
-- **Real-time SSE** — `GET /zones/stream` (all zones) and `GET /zones/:id/events` (per zone).
+- **Dynamic availability** — `available_spots = total_capacity − active reservations`, computed on every read, never stored stale.
+- **Concurrency-safe reservations** — transactional row-locked booking path; over-capacity attempts return `409 Conflict`.
+- **Bookable parking spots** — per-zone stalls with map coordinates (`pos_x`/`pos_y`); optional `spot_id` targeting; a partial unique index prevents two active bookings on the same stall.
+- **Real-time SSE** — `GET /zones/stream` (all zones) and `GET /zones/:id/events` (per zone); Redis pub/sub fans events out across replicas.
+- **Transactional outbox + worker** — reservation events are written atomically with the booking and relayed by a separate worker process (with dead-lettering).
 - **Redis cache-aside** — zone availability counts cached when `REDIS_URL` is set; invalidated on reserve/cancel.
+- **Marketplace layer** — organizations, self-apply → approval flow, org-scoped zones, billing plan gates.
+- **Demo reservation TTL** — `X-Demo-Reservation: true` auto-expires showcase bookings (lazy cleanup on reads) so the public demo stays clean.
+- **Ownership-scoped actions** — drivers cancel only their own reservations; admins list all.
+- **Consistent API contract** — `{success, message, data}` / `{success, message, errors}` envelope on every response; field-level validation errors; raw driver/ORM errors never leak.
+- **Operational endpoints** — `/healthz`, `/readyz`, Prometheus `/metrics`, structured `slog` logging with request IDs, explicit CORS, rate-limited `/auth/*`.
 
 ---
 
@@ -68,14 +114,15 @@ SpotSync treats that race as the central engineering problem. The reservation pa
 | --- | --- |
 | Language | Go 1.25+ |
 | HTTP | [Echo v4](https://echo.labstack.com/) |
-| ORM | [GORM](https://gorm.io/) (PostgreSQL) |
-| Database | PostgreSQL ([Neon](https://neon.tech/) in production) |
-| Validation | go-playground/validator/v10 |
-| Auth | golang-jwt/jwt/v5 + bcrypt |
-| Migrations | golang-migrate (embedded SQL) |
-| Deploy | [Render](https://render.com/) (Docker web + worker) |
-| Cache / pub-sub | Redis (optional — [Upstash](https://upstash.com/) on Render) |
-| Frontend | [spotsync-web](https://github.com/rayeemomayeer/spotsync-web) on [Vercel](https://spotsync-nu.vercel.app) |
+| ORM | [GORM](https://gorm.io/) (PostgreSQL driver) |
+| Database | PostgreSQL — [Neon](https://neon.tech/) in production |
+| Validation | [go-playground/validator/v10](https://github.com/go-playground/validator) |
+| Auth | [golang-jwt/jwt/v5](https://github.com/golang-jwt/jwt) + bcrypt |
+| Migrations | [golang-migrate](https://github.com/golang-migrate/migrate) (versioned SQL, embedded at build) |
+| Cache / pub-sub | Redis — [Upstash](https://upstash.com/) in production (optional) |
+| Observability | Prometheus metrics, structured `slog`, optional OpenTelemetry |
+| Load testing | [k6](https://k6.io/) with thresholds |
+| Deploy | [Render](https://render.com/) — Docker web service + background worker |
 
 ---
 
@@ -135,14 +182,6 @@ sequenceDiagram
 | `reservations` | `user_id`, `zone_id`, `license_plate`, `status` (`active` \| `cancelled` \| `completed`) |
 
 Availability is derived, not stored: `available_spots = total_capacity − count(active reservations)`.
-
----
-
-## The concurrency problem
-
-If `total_capacity` is 1 and one reservation is active, the next must be rejected. Two simultaneous requests can both read "0 active" and both succeed unless the check-and-insert is serialized.
-
-SpotSync opens a transaction, locks the zone row (`FOR UPDATE`), counts active reservations, and inserts only when `active < total_capacity`. Concurrent reservers for the same zone queue behind the lock. A 50-goroutine stampede test asserts exactly one success on a single-spot zone.
 
 ---
 
@@ -218,6 +257,7 @@ The API listens on `http://localhost:8080` with migrations applied on startup.
 | `BCRYPT_COST` | no | `12` | bcrypt cost (10–14) |
 | `ALLOW_SELF_ADMIN_REGISTRATION` | no | `true` | Honor `admin` role on register |
 | `CORS_ALLOWED_ORIGINS` | no | — | Comma-separated origins |
+| `REDIS_URL` | no | — | Enables SSE fan-out + availability cache |
 | `DEMO_RESERVATION_TTL` | no | `10m` | Auto-expiry for demo reservations (`X-Demo-Reservation: true`) |
 | `MIGRATE_ON_STARTUP` | no | `true` | Run embedded migrations on boot |
 | `LOG_LEVEL` | no | `info` | Log verbosity |
@@ -231,10 +271,14 @@ Create a production admin with `make seed` when `ALLOW_SELF_ADMIN_REGISTRATION=f
 
 ## API reference
 
-Base path: `/api/v1`. All responses use a consistent envelope.
+Base path: `/api/v1` · Live base: `https://spotsync-ei6g.onrender.com/api/v1` · Interactive docs: [spotsync-nu.vercel.app/developers](https://spotsync-nu.vercel.app/developers) · Spec: [openapi.yaml](./openapi.yaml)
 
-**Success:** `{ "success": true, "message": "…", "data": … }`  
+All responses use a consistent envelope:
+
+**Success:** `{ "success": true, "message": "…", "data": … }`
 **Error:** `{ "success": false, "message": "…", "errors": { "field": "…" } }`
+
+### Core endpoints
 
 | # | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- | --- |
@@ -248,7 +292,7 @@ Base path: `/api/v1`. All responses use a consistent envelope.
 | 8 | DELETE | `/reservations/:id` | Auth | Cancel own reservation (`403` if not owner) |
 | 9 | GET | `/reservations` | Admin | List all (optional `?page` & `?limit`; pagination headers when present) |
 
-### Frontend-enablement endpoints (additive)
+### Additive endpoints
 
 | Method | Endpoint | Access | Description |
 | --- | --- | --- | --- |
@@ -257,8 +301,10 @@ Base path: `/api/v1`. All responses use a consistent envelope.
 | DELETE | `/zones/:id` | Admin | Delete zone (`200`; `409` if active reservations remain) |
 | GET | `/zones/:id/spots` | Public | List bookable spots with occupancy (`200`) |
 | PUT | `/zones/:id/spots/:spotId` | Admin | Toggle spot availability (`200`) |
+| GET | `/zones/stream` | Public | SSE — all-zone availability events |
+| GET | `/zones/:id/events` | Public | SSE — single-zone events |
 
-**Zone list filters** (all optional on `GET /zones`; omitted params preserve the full-array contract):
+**Zone list filters** (all optional on `GET /zones`; omitted params return the full array):
 
 | Param | Values | Purpose |
 | --- | --- | --- |
@@ -267,53 +313,9 @@ Base path: `/api/v1`. All responses use a consistent envelope.
 | `sort` | `available_spots`, `price_per_hour`, `name` | Sort field |
 | `order` | `asc`, `desc` | Sort direction |
 
-**Admin pagination headers** — when `GET /reservations` includes `?page` and/or `?limit`, the response adds:
+**Admin pagination headers** — when `GET /reservations` includes `?page` and/or `?limit`, the response adds `X-Total-Count`, `X-Page`, and `X-Limit` (exposed via CORS `ExposeHeaders` for browser clients).
 
-| Header | Description |
-| --- | --- |
-| `X-Total-Count` | Total reservations across all pages |
-| `X-Page` | Current page (default `1`) |
-| `X-Limit` | Page size (default `20`, max `100`) |
-
-Expose these headers via CORS (`ExposeHeaders`) so browser clients can build admin tables.
-
-### Frontend integration
-
-| Topic | Detail |
-| --- | --- |
-| Base URL | `https://<api-host>/api/v1` (local: `http://localhost:8080/api/v1`) |
-| Auth | `Authorization: Bearer <token>` on protected routes |
-| Envelope | `{success, message, data}` on success; `{success, message, errors}` on failure |
-| Session | Call `GET /auth/me` on app load to rehydrate user name/email/role |
-| CORS | Set `CORS_ALLOWED_ORIGINS` to your frontend origin (e.g. `http://localhost:3000`, Vercel URL) |
-| Demo bookings | Optional header `X-Demo-Reservation: true` on `POST /reservations` |
-
-### Bookable spots
-
-Zones with `parking_spots` rows use **spot count as the capacity source of truth** (`total_capacity` syncs when spots are created or trimmed).
-
-**List spots (map UI)**
-
-```http
-GET /api/v1/zones/1/spots
-```
-
-Returns `label`, `pos_x`, `pos_y`, `status`, and `occupied` per stall.
-
-**Reserve a specific stall** — optional `spot_id` (omit for auto-assign; graded contract unchanged)
-
-```http
-POST /api/v1/reservations
-Authorization: Bearer <token>
-X-Demo-Reservation: true
-Content-Type: application/json
-
-{ "zone_id": 1, "license_plate": "DEMO-A1B2", "spot_id": 12 }
-```
-
-Response `data` may include an additive `spot` object. Returns `409` when the zone is full or the spot is taken.
-
-Demo bookings with `X-Demo-Reservation: true` expire after `DEMO_RESERVATION_TTL` (default `10m`); expired rows are cancelled lazily on `GET /zones/:id/spots` and `GET /reservations/my-reservations`.
+### Quick examples
 
 **Register**
 
@@ -324,7 +326,7 @@ Content-Type: application/json
 { "name": "Jane Doe", "email": "jane@example.com", "password": "password123", "role": "driver" }
 ```
 
-**Login**
+**Login** — response `data` contains `token` and `user`; send `Authorization: Bearer <token>` on protected routes.
 
 ```http
 POST /api/v1/auth/login
@@ -333,19 +335,23 @@ Content-Type: application/json
 { "email": "jane@example.com", "password": "password123" }
 ```
 
-Response `data` contains `token` and `user`. Send `Authorization: Bearer <token>` on protected routes.
-
-**Reserve**
+**Reserve** — optional `spot_id` targets a specific stall (omit for auto-assign); optional `X-Demo-Reservation: true` makes the booking auto-expire after `DEMO_RESERVATION_TTL`.
 
 ```http
 POST /api/v1/reservations
 Authorization: Bearer <token>
 Content-Type: application/json
 
-{ "zone_id": 1, "license_plate": "ABC-1234" }
+{ "zone_id": 1, "license_plate": "ABC-1234", "spot_id": 12 }
 ```
 
-With bookable spots, add `"spot_id": 12` to target a stall, or omit for auto-assign.
+Returns `201` with an additive `spot` object, or `409` when the zone is full / the stall is taken.
+
+**List spots (map UI)** — returns `label`, `pos_x`, `pos_y`, `status`, and `occupied` per stall.
+
+```http
+GET /api/v1/zones/1/spots
+```
 
 ### Status codes
 
@@ -357,7 +363,7 @@ With bookable spots, add `"spot_id": 12` to target a stall, or omit for auto-ass
 | 401 | Missing or invalid token |
 | 403 | Forbidden (role or ownership) |
 | 404 | Not found |
-| 409 | Conflict (zone full, duplicate email) |
+| 409 | Conflict (zone full, spot taken, duplicate email) |
 | 500 | Server error |
 
 ---
@@ -371,38 +377,25 @@ make test-int        # integration (requires Docker)
 make test-contract   # graded API replay (requires Docker)
 ```
 
-The contract suite replays all nine endpoints against a real Postgres instance. The stampede test fires 50 concurrent reservations at a 1-capacity zone and asserts exactly one success. Spot tests cover per-stall races (30 workers, one `spot_id`), auto-assign with spot preload, and demo TTL lazy cleanup.
+- The **contract suite** replays all nine core endpoints against a real Postgres instance and must stay green — the API surface is treated as a frozen interface.
+- The **stampede test** fires 50 concurrent reservations at a 1-capacity zone and asserts exactly one success.
+- **Spot tests** cover per-stall races (30 workers, one `spot_id`), auto-assign with spot preload, and demo TTL lazy cleanup.
+- **k6 load tests** with thresholds validate the capacity strategies under sustained load.
 
 ---
 
 ## Deployment
 
-Production stack: **Neon** (Postgres) + **Render** (API).
+Production stack: **Neon** (Postgres) + **Render** (Docker web service + worker) + **Upstash** (Redis).
 
-### Render MCP (Cursor)
+### Option A — Render Blueprint (recommended)
 
-SpotSync is configured to use Render's hosted MCP server so you can manage deploys from Cursor.
-
-1. Create an API key at [Render Account Settings → API Keys](https://dashboard.render.com/u/settings#api-keys).
-2. Set it as a **user environment variable** (Windows: Settings → System → Environment variables):
-   ```
-   RENDER_API_KEY=your-key-here
-   ```
-3. **Restart Cursor** so it picks up the MCP config (`~/.cursor/mcp.json` and `.cursor/mcp.json` in this repo).
-4. In Cursor chat, run: `Set my Render workspace to [YOUR_WORKSPACE]`
-5. Then prompt: _"Deploy SpotSync from this repo using render.yaml"_ or _"List my Render services"_.
-
-MCP endpoint: `https://mcp.render.com/mcp`
-
-### Option A — Blueprint (recommended)
-
-1. Push this repo to GitHub.
-2. In [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint**.
-3. Connect `rayeemomayeer/SpotSync` — Render reads `render.yaml` at the repo root.
-4. When prompted, set secrets:
-   - `DATABASE_URL` — your Neon pooled connection string (`sslmode=require`)
+1. Push the repo to GitHub.
+2. In [Render Dashboard](https://dashboard.render.com/) → **New** → **Blueprint** — Render reads [`render.yaml`](./render.yaml) at the repo root.
+3. When prompted, set secrets:
+   - `DATABASE_URL` — Neon **pooled** connection string with `sslmode=require`
    - `JWT_SECRET` — a long random string
-5. Deploy. Migrations run on startup (`MIGRATE_ON_STARTUP=true`).
+4. Deploy. Migrations run on startup (`MIGRATE_ON_STARTUP=true`).
 
 Verify:
 
@@ -416,27 +409,18 @@ curl https://spotsync-ei6g.onrender.com/readyz
 1. **New → Web Service** → connect this GitHub repo.
 2. **Runtime:** Docker · **Dockerfile path:** `deploy/docker/Dockerfile`
 3. **Health check path:** `/healthz`
-4. Add environment variables from [Configuration](#configuration) (`DATABASE_URL`, `JWT_SECRET`, etc.).
-5. Create web service and deploy.
+4. Add environment variables from [Configuration](#configuration).
 
-### Neon database
+### Worker + Redis (production)
 
-If you don't have Postgres yet:
-
-1. Create a project at [neon.tech](https://neon.tech/).
-2. Copy the **pooled** connection string with `sslmode=require`.
-3. Set it as `DATABASE_URL` on Render (not in git).
+- **Worker** (`spotsync-worker` in `render.yaml`) — relays outbox events and runs scheduled expiry.
+- **Redis** — set `REDIS_URL` on both API and worker for cross-replica SSE fan-out and the availability cache.
 
 ### CORS
 
-`render.yaml` sets `CORS_ALLOWED_ORIGINS=https://spotsync-nu.vercel.app`. Add preview URLs comma-separated if needed. When unset locally, all origins are allowed (`*`).
+`render.yaml` sets `CORS_ALLOWED_ORIGINS=https://spotsync-nu.vercel.app`. Add preview URLs comma-separated as needed. Unset locally = all origins allowed (`*`).
 
-### Worker + Redis (recommended for production)
-
-- **Worker** (`spotsync-worker` in `render.yaml`) — relays outbox events and runs scheduled expiry.
-- **Redis** — set `REDIS_URL` on both API and worker for cross-replica SSE and availability cache.
-
-See [deploy/runbook.md](./deploy/runbook.md) for deploy, rollback, and observability.
+Operational docs: [deploy/runbook.md](./deploy/runbook.md) · [deploy/staging.md](./deploy/staging.md) · [deploy/incident.md](./deploy/incident.md) · [deploy/observability.md](./deploy/observability.md)
 
 ---
 
@@ -444,19 +428,17 @@ See [deploy/runbook.md](./deploy/runbook.md) for deploy, rollback, and observabi
 
 | Area | Status |
 | --- | --- |
-| Graded nine-endpoint contract + stampede proof | Done |
-| Transactional outbox + worker relay | Done |
+| Nine-endpoint core contract + concurrent stampede proof | Done |
+| Transactional outbox + worker relay + dead-letter | Done |
 | SSE + Redis fan-out + availability cache | Done |
 | Capacity strategies (`row_lock`, `optimistic`, `redis_counter`) | Done |
-| Marketplace orgs / saas_admin / org_admin / driver | Done |
-| OpenAPI (`openapi.yaml`) + optional OTel | Done |
+| Marketplace orgs / `saas_admin` / `org_admin` / `driver` roles | Done |
+| OpenAPI spec ([openapi.yaml](./openapi.yaml)) + optional OpenTelemetry | Done |
 | Notifications API + outbox dead-letter | Done |
-| Prometheus metrics, k6, kind (local) | Done |
-| Sibling Express BFF + notify services | Separate repos |
+| Prometheus metrics, k6 load tests, kind (local Kubernetes) | Done |
+| Sibling Express BFF + notify services | [Separate repos](#the-spotsync-stack) |
 
-Release tags: `v1.0.0-graded` … `v1.5.0-k8s` (see git tags).
-
-See also: [deploy/staging.md](./deploy/staging.md), [deploy/runbook.md](./deploy/runbook.md), [deploy/incident.md](./deploy/incident.md), [deploy/observability.md](./deploy/observability.md).
+Release tags: `v1.0.0-graded` … `v1.5.0-k8s` (see git tags for the progressive build story).
 
 ---
 
